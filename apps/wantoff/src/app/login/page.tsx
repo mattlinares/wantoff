@@ -6,6 +6,8 @@ import { useAuth } from "@/lib/auth-context";
 import { login, register, getWalletNonce, verifyWalletLogin } from "@/lib/api";
 import { signLoginMessage } from "@/lib/circles";
 
+const IS_EMBEDDED = process.env.NEXT_PUBLIC_WALLET_MODE === "embedded";
+
 export default function LoginPage() {
   const router = useRouter();
   const { setToken, refresh } = useAuth();
@@ -69,18 +71,21 @@ export default function LoginPage() {
     <main className="container">
       <h1>{mode === "login" ? "Log in" : "Create an account"}</h1>
 
-      <div className="card" style={{ marginBottom: 24 }}>
-        <h3 style={{ marginTop: 0 }}>Sign in with a Circles wallet</h3>
-        <p style={{ color: "#555", margin: "0 0 12px" }}>
-          No password needed — sign a message with your wallet to verify your identity.
-        </p>
-        {walletError && <p className="error">{walletError}</p>}
-        <button onClick={onWalletSignIn} disabled={walletBusy}>
-          {walletBusy ? "Waiting for wallet..." : "Connect wallet & sign in"}
-        </button>
-      </div>
-
-      <p style={{ color: "#888", textAlign: "center", margin: "0 0 16px" }}>— or use email —</p>
+      {IS_EMBEDDED && (
+        <>
+          <div className="card" style={{ marginBottom: 24 }}>
+            <h3 style={{ marginTop: 0 }}>Sign in with your Circles wallet</h3>
+            <p style={{ color: "#555", margin: "0 0 12px" }}>
+              No password needed — sign a message with your wallet to verify your identity.
+            </p>
+            {walletError && <p className="error">{walletError}</p>}
+            <button onClick={onWalletSignIn} disabled={walletBusy}>
+              {walletBusy ? "Waiting for wallet..." : "Connect wallet & sign in"}
+            </button>
+          </div>
+          <p style={{ color: "#888", textAlign: "center", margin: "0 0 16px" }}>— or use email —</p>
+        </>
+      )}
 
       <p>
         <button type="button" onClick={() => setMode(mode === "login" ? "register" : "login")}>
