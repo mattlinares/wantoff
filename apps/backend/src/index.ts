@@ -1,7 +1,7 @@
 import cors from "cors";
 import express from "express";
 import bcrypt from "bcryptjs";
-import { verifyMessage } from "ethers";
+import { verifyMessage, hashMessage, JsonRpcProvider, Contract } from "ethers";
 import { prisma } from "./prisma.js";
 import { optionalAuth, requireAuth, signToken, type AuthedRequest } from "./auth.js";
 import { notify } from "./mailer.js";
@@ -121,14 +121,29 @@ app.post("/auth/wallet/verify", async (req, res) => {
   }
 
   const message = walletLoginMessage(address, stored.nonce);
-  let recovered: string;
+
+  // Try EOA (MetaMask/standalone) first, then ERC-1271 Safe (Circles embedded).
+  let sigValid = false;
   try {
-    recovered = verifyMessage(message, signature);
-  } catch {
-    return res.status(401).json({ error: "invalid signature" });
+    const recovered = verifyMessage(message, signature);
+    sigValid = recovered.toLowerCase() === address.toLowerCase();
+  } catch { /* not an EOA sig */ }
+
+  if (!sigValid) {
+    // ERC-1271: call isValidSignature on the Safe contract at address.
+    try {
+      const rpc = process.env.GNOSIS_RPC_URL ?? "https://rpc.gnosischain.com";
+      const provider = new JsonRpcProvider(rpc);
+      const abi = ["function isValidSignature(bytes32,bytes) view returns (bytes4)"];
+      const safe = new Contract(address, abi, provider);
+      // SDK signs with erc1271 type: host hashes message with EIP-191 prefix first.
+      const eip191Hash = hashMessage(message);
+      const result: string = await safe.isValidSignature(eip191Hash, signature);
+      sigValid = result === "0x1626ba7e";
+    } catch { /* not a Safe or RPC failed */ }
   }
 
-  if (recovered.toLowerCase() !== address.toLowerCase()) {
+  if (!sigValid) {
     return res.status(401).json({ error: "signature does not match address" });
   }
 

@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { login, register, getWalletNonce, verifyWalletLogin } from "@/lib/api";
-import { signLoginMessage } from "@/lib/circles";
 
 const IS_EMBEDDED = process.env.NEXT_PUBLIC_WALLET_MODE === "embedded";
 
@@ -17,8 +16,19 @@ export default function LoginPage() {
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [walletBusy, setWalletBusy] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
+
+  // In embedded mode, the Circles host injects the wallet — subscribe to changes.
+  useEffect(() => {
+    if (!IS_EMBEDDED) return;
+    let unsub: (() => void) | undefined;
+    import("@aboutcircles/miniapp-sdk").then(({ onWalletChange }) => {
+      unsub = onWalletChange((addr) => setWalletAddress(addr));
+    });
+    return () => unsub?.();
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,24 +50,19 @@ export default function LoginPage() {
     setWalletError(null);
     setWalletBusy(true);
     try {
-      // Get address from wallet first (minimal prompt — just account access)
-      const { BrowserProvider } = await import("ethers");
-      if (typeof window === "undefined" || !window.ethereum) {
-        throw new Error("No Ethereum wallet found. Install MetaMask or a Circles-compatible wallet.");
+      const { signMessage, requestCreateAccount } = await import("@aboutcircles/miniapp-sdk");
+
+      let address = walletAddress;
+      if (!address) {
+        // Prompt the host's account creation / login flow.
+        const result = await requestCreateAccount();
+        address = result.address;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const provider = new BrowserProvider(window.ethereum as any);
-      const signer = await provider.getSigner();
-      const address = await signer.getAddress();
 
-      // Get nonce + message from backend
       const { message } = await getWalletNonce(address);
-
-      // Sign
-      const { address: signedAddress, signature } = await signLoginMessage(message);
-
-      // Verify with backend → JWT
-      const result = await verifyWalletLogin(signedAddress, signature);
+      // SDK signs via Safe ERC-1271 — no window.ethereum involved.
+      const { signature } = await signMessage(message);
+      const result = await verifyWalletLogin(address, signature);
       setToken(result.token);
       await refresh();
       router.push("/dashboard");
@@ -76,12 +81,22 @@ export default function LoginPage() {
         <>
           <div className="card" style={{ marginBottom: 24 }}>
             <h3 style={{ marginTop: 0 }}>Sign in with your Circles wallet</h3>
-            <p style={{ color: "#555", margin: "0 0 12px" }}>
-              No password needed — sign a message with your wallet to verify your identity.
-            </p>
+            {walletAddress ? (
+              <p style={{ color: "#555", margin: "0 0 12px", fontFamily: "monospace", fontSize: 13 }}>
+                {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)}
+              </p>
+            ) : (
+              <p style={{ color: "#555", margin: "0 0 12px" }}>
+                No wallet connected — the Circles host will prompt you.
+              </p>
+            )}
             {walletError && <p className="error">{walletError}</p>}
             <button onClick={onWalletSignIn} disabled={walletBusy}>
-              {walletBusy ? "Waiting for wallet..." : "Connect wallet & sign in"}
+              {walletBusy
+                ? "Waiting for wallet..."
+                : walletAddress
+                ? "Sign in with wallet"
+                : "Connect Circles account"}
             </button>
           </div>
           <p style={{ color: "#888", textAlign: "center", margin: "0 0 16px" }}>— or use email —</p>
