@@ -1,0 +1,7 @@
+{
+  "name": "circles-wantoff",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ]
+}

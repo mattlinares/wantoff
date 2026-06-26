@@ -1,0 +1,232 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ListingType {
+  OFFER
+  WANT
+}
+
+enum JoinPolicy {
+  PUBLIC
+  INVITE_ONLY
+}
+
+enum GroupRole {
+  OWNER
+  MODERATOR
+  MEMBER
+}
+
+enum ListingStatus {
+  OPEN
+  MATCHED
+  CLOSED
+  CANCELLED
+}
+
+enum ExchangeStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentKind {
+  CREDIT
+  CURRENCY
+  DONATION
+}
+
+enum PaymentStatus {
+  PENDING
+  SETTLED
+  FAILED
+}
+
+// Actor — a user, org, or "platform" sentinel row for fee payouts.
+model Actor {
+  id                  String   @id @default(uuid())
+  email               String   @unique
+  passwordHash        String
+  displayName         String
+  reputationScore     Float    @default(50) // 0-100, recency-weighted rolling avg
+  reviewCount         Int      @default(0)
+  reputationUpdatedAt DateTime @updatedAt
+  circlesWallet       String? // CRC wallet address (Gnosis Chain)
+  gbpRef              String? // future fiat rail reference
+  location            Json? // { lat, lng, address } — used to sort listings by proximity
+  isAdmin             Boolean  @default(false) // can manage ItemTypeTemplates
+
+  credits      CreditBalance[]
+  listings     Listing[]
+  messages     Message[]
+  reviewsGiven Review[]           @relation("reviewer")
+  reviewsRecv  Review[]           @relation("reviewee")
+  memberships  GroupMembership[]
+
+  createdAt DateTime @default(now())
+}
+
+// Per-actor balances for platform-internal credits (e.g. "mealmate.meal-credit").
+model CreditBalance {
+  id         String  @id @default(uuid())
+  actorId    String
+  actor      Actor   @relation(fields: [actorId], references: [id])
+  creditType String
+  amount     Decimal @default(0)
+
+  @@unique([actorId, creditType])
+}
+
+// Offer or want for some itemType (e.g. "mealmate.meal"). Fee/currency
+// terms and item-specific fields are stored as JSON per docs/exchange-protocol.md.
+model Listing {
+  id            String        @id @default(uuid())
+  type          ListingType
+  actorId       String
+  actor         Actor         @relation(fields: [actorId], references: [id])
+  itemType      String
+  status        ListingStatus @default(OPEN)
+  fees          Json // Fee[]
+  currencies    Json // CurrencyOption[]
+  minReputation Float?
+  attributes    Json // itemType-specific payload, e.g. mealmate.meal fields
+
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  exchangesAsOffer Exchange[]     @relation("offerListing")
+  exchangesAsWant  Exchange[]     @relation("wantListing")
+  listingGroups    ListingGroup[]
+
+  @@index([itemType, status])
+}
+
+// Created when an offer + want are matched. Anchors messaging, payments, reviews.
+model Exchange {
+  id              String         @id @default(uuid())
+  offerListingId  String
+  offerListing    Listing        @relation("offerListing", fields: [offerListingId], references: [id])
+  // Mealmate v1 has no "want" listings — joiners attach directly to an
+  // offer's Exchange, so this is null unless another app uses want listings.
+  wantListingId   String?
+  wantListing     Listing?       @relation("wantListing", fields: [wantListingId], references: [id])
+  participantIds  String[]
+  status          ExchangeStatus @default(PENDING)
+  scheduledAt     DateTime?
+  messageThreadId String?
+  appliedFees     Json // Fee[] snapshot, settlement order: credits -> required currency -> donations
+
+  payments Payment[]
+  reviews  Review[]
+
+  createdAt DateTime @default(now())
+}
+
+// Settlement record. toActorId may be the sentinel "platform" actor for platform fees.
+model Payment {
+  id         String        @id @default(uuid())
+  exchangeId String
+  exchange   Exchange      @relation(fields: [exchangeId], references: [id])
+  fromActorId String
+  toActorId   String
+  kind        PaymentKind
+  creditType  String?
+  currency    String?
+  amount      Decimal
+  status      PaymentStatus @default(PENDING)
+  txRef       String? // e.g. Circles tx hash
+  settledAt   DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+// Post-exchange reputation feedback. Admin reviews use higher weight.
+model Review {
+  id         String   @id @default(uuid())
+  exchangeId String
+  exchange   Exchange @relation(fields: [exchangeId], references: [id])
+  reviewerId String
+  reviewer   Actor    @relation("reviewer", fields: [reviewerId], references: [id])
+  revieweeId String
+  reviewee   Actor    @relation("reviewee", fields: [revieweeId], references: [id])
+  score      Float // contribution to 0-100 rolling reputation
+  tags       String[]
+  comment    String?
+  weight     Float    @default(1)
+
+  createdAt DateTime @default(now())
+}
+
+// Registry of itemType templates for the "add a want/offer" form — see
+// docs/wantoff-app-plan.md section 4. Curated itemTypes (e.g. "mealmate.meal")
+// get a structured fieldSchema + sensible defaults; "wantoff.other" is the
+// freeform fallback with an empty fieldSchema.
+model ItemTypeTemplate {
+  id                String @id @default(uuid())
+  itemType          String @unique
+  label             String
+  fieldSchema       Json // FieldSchema[]
+  defaultFees       Json // Fee[]
+  defaultCurrencies Json // CurrencyOption[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// User-created communities. Listings can be opt-in associated with a group
+// by their owner (rep ≥ 2 stars). Owner/mods can remove listings.
+model Group {
+  id          String     @id @default(uuid())
+  name        String
+  description String?
+  slug        String     @unique
+  joinPolicy  JoinPolicy @default(PUBLIC)
+  createdAt   DateTime   @default(now())
+
+  memberships   GroupMembership[]
+  listingGroups ListingGroup[]
+}
+
+model GroupMembership {
+  groupId  String
+  actorId  String
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime  @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  actor Actor @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, actorId])
+}
+
+model ListingGroup {
+  listingId String
+  groupId   String
+  addedAt   DateTime @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  group   Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([listingId, groupId])
+}
+
+// Simple per-thread chat for exchange preparations.
+model Message {
+  id       String @id @default(uuid())
+  threadId String
+  senderId String
+  sender   Actor  @relation(fields: [senderId], references: [id])
+  body     String
+
+  createdAt DateTime @default(now())
+
+  @@index([threadId, createdAt])
+}
