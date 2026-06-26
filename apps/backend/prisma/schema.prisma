@@ -53,8 +53,8 @@ enum PaymentStatus {
 // Actor — a user, org, or "platform" sentinel row for fee payouts.
 model Actor {
   id                  String   @id @default(uuid())
-  email               String   @unique
-  passwordHash        String
+  email               String?  @unique
+  passwordHash        String?
   displayName         String
   reputationScore     Float    @default(50) // 0-100, recency-weighted rolling avg
   reviewCount         Int      @default(0)

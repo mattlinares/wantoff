@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 import bcrypt from "bcryptjs";
+import { verifyMessage } from "ethers";
 import { prisma } from "./prisma.js";
 import { optionalAuth, requireAuth, signToken, type AuthedRequest } from "./auth.js";
 import { notify } from "./mailer.js";
@@ -27,6 +28,14 @@ app.use(express.json());
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
+
+// ── Wallet auth nonce store ───────────────────────────────────────────────────
+// In-memory; nonces expire after 5 minutes. Fine for single-instance deploys.
+const nonceStore = new Map<string, { nonce: string; expiresAt: number }>();
+
+function walletLoginMessage(address: string, nonce: string): string {
+  return `Sign in to Wantoff\n\nAddress: ${address}\nNonce: ${nonce}\n\nThis request will not trigger a blockchain transaction or cost any gas.`;
+}
 
 function serializeActor(actor: {
   id: string;
@@ -80,8 +89,61 @@ app.post("/auth/login", async (req, res) => {
   }
 
   const actor = await prisma.actor.findUnique({ where: { email }, include: { credits: true } });
-  if (!actor || !(await bcrypt.compare(password, actor.passwordHash))) {
+  if (!actor || !actor.passwordHash || !(await bcrypt.compare(password, actor.passwordHash))) {
     return res.status(401).json({ error: "invalid email or password" });
+  }
+
+  res.json({ token: signToken(actor.id), actor: serializeActor(actor) });
+});
+
+// GET /auth/wallet/nonce?address=0x... — issue a one-time nonce for wallet sign-in.
+app.get("/auth/wallet/nonce", (req, res) => {
+  const address = typeof req.query.address === "string" ? req.query.address.toLowerCase() : null;
+  if (!address || !/^0x[0-9a-f]{40}$/.test(address)) {
+    return res.status(400).json({ error: "valid Ethereum address required" });
+  }
+  const nonce = crypto.randomUUID().replace(/-/g, "");
+  nonceStore.set(address, { nonce, expiresAt: Date.now() + 5 * 60 * 1000 });
+  res.json({ nonce, message: walletLoginMessage(req.query.address as string, nonce) });
+});
+
+// POST /auth/wallet/verify — verify signed nonce, find-or-create actor, return JWT.
+app.post("/auth/wallet/verify", async (req, res) => {
+  const { address, signature } = req.body ?? {};
+  if (typeof address !== "string" || typeof signature !== "string") {
+    return res.status(400).json({ error: "address and signature are required" });
+  }
+
+  const stored = nonceStore.get(address.toLowerCase());
+  if (!stored || Date.now() > stored.expiresAt) {
+    nonceStore.delete(address.toLowerCase());
+    return res.status(400).json({ error: "nonce expired or not found — request a new one" });
+  }
+
+  const message = walletLoginMessage(address, stored.nonce);
+  let recovered: string;
+  try {
+    recovered = verifyMessage(message, signature);
+  } catch {
+    return res.status(401).json({ error: "invalid signature" });
+  }
+
+  if (recovered.toLowerCase() !== address.toLowerCase()) {
+    return res.status(401).json({ error: "signature does not match address" });
+  }
+
+  nonceStore.delete(address.toLowerCase());
+
+  let actor = await prisma.actor.findFirst({ where: { circlesWallet: address }, include: { credits: true } });
+  if (!actor) {
+    actor = await prisma.actor.create({
+      data: {
+        circlesWallet: address,
+        displayName: `${address.slice(0, 6)}…${address.slice(-4)}`,
+        credits: { create: { creditType: "mealmate.meal-credit", amount: 3 } },
+      },
+      include: { credits: true },
+    });
   }
 
   res.json({ token: signToken(actor.id), actor: serializeActor(actor) });
@@ -96,7 +158,7 @@ app.get("/me", requireAuth, async (req: AuthedRequest, res) => {
 });
 
 app.patch("/me", requireAuth, async (req: AuthedRequest, res) => {
-  const { circlesWallet, location } = req.body ?? {};
+  const { circlesWallet, location, displayName } = req.body ?? {};
   if (circlesWallet !== undefined && circlesWallet !== null && typeof circlesWallet !== "string") {
     return res.status(400).json({ error: "circlesWallet must be a string or null" });
   }
@@ -125,6 +187,7 @@ app.patch("/me", requireAuth, async (req: AuthedRequest, res) => {
     data: {
       ...(circlesWallet !== undefined ? { circlesWallet: circlesWallet === null ? null : circlesWallet.trim() || null } : {}),
       ...(locationData !== undefined ? { location: locationData === null ? { set: null } : locationData } : {}),
+      ...(typeof displayName === "string" && displayName.trim() ? { displayName: displayName.trim() } : {}),
     },
     include: { credits: true },
   });

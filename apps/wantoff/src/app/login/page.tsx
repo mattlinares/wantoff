@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { login, register } from "@/lib/api";
+import { login, register, getWalletNonce, verifyWalletLogin } from "@/lib/api";
+import { signLoginMessage } from "@/lib/circles";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,6 +15,8 @@ export default function LoginPage() {
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [walletBusy, setWalletBusy] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,11 +34,55 @@ export default function LoginPage() {
     }
   }
 
+  async function onWalletSignIn() {
+    setWalletError(null);
+    setWalletBusy(true);
+    try {
+      // Get address from wallet first (minimal prompt — just account access)
+      const { BrowserProvider } = await import("ethers");
+      if (typeof window === "undefined" || !window.ethereum) {
+        throw new Error("No Ethereum wallet found. Install MetaMask or a Circles-compatible wallet.");
+      }
+      const provider = new BrowserProvider(window.ethereum as Parameters<typeof BrowserProvider>[0]);
+      const signer = await provider.getSigner();
+      const address = await signer.getAddress();
+
+      // Get nonce + message from backend
+      const { message } = await getWalletNonce(address);
+
+      // Sign
+      const { address: signedAddress, signature } = await signLoginMessage(message);
+
+      // Verify with backend → JWT
+      const result = await verifyWalletLogin(signedAddress, signature);
+      setToken(result.token);
+      await refresh();
+      router.push("/dashboard");
+    } catch (err) {
+      setWalletError(err instanceof Error ? err.message : "wallet sign-in failed");
+    } finally {
+      setWalletBusy(false);
+    }
+  }
+
   return (
     <main className="container">
       <h1>{mode === "login" ? "Log in" : "Create an account"}</h1>
+
+      <div className="card" style={{ marginBottom: 24 }}>
+        <h3 style={{ marginTop: 0 }}>Sign in with a Circles wallet</h3>
+        <p style={{ color: "#555", margin: "0 0 12px" }}>
+          No password needed — sign a message with your wallet to verify your identity.
+        </p>
+        {walletError && <p className="error">{walletError}</p>}
+        <button onClick={onWalletSignIn} disabled={walletBusy}>
+          {walletBusy ? "Waiting for wallet..." : "Connect wallet & sign in"}
+        </button>
+      </div>
+
+      <p style={{ color: "#888", textAlign: "center", margin: "0 0 16px" }}>— or use email —</p>
+
       <p>
-        Same account as Mealmate — one login works across both. {" "}
         <button type="button" onClick={() => setMode(mode === "login" ? "register" : "login")}>
           {mode === "login" ? "Need an account? Register" : "Have an account? Log in"}
         </button>

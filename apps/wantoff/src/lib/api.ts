@@ -151,8 +151,19 @@ export function getPublicProfile(id: string) {
   return request<PublicProfile>(`/actors/${id}/public-profile`);
 }
 
-export function updateMe(token: string, body: { circlesWallet?: string | null }) {
+export function updateMe(token: string, body: { circlesWallet?: string | null; displayName?: string }) {
   return request<Actor>("/me", { method: "PATCH", token, body: JSON.stringify(body) });
+}
+
+export function getWalletNonce(address: string) {
+  return request<{ nonce: string; message: string }>(`/auth/wallet/nonce?address=${encodeURIComponent(address)}`);
+}
+
+export function verifyWalletLogin(address: string, signature: string) {
+  return request<{ token: string; actor: Actor }>("/auth/wallet/verify", {
+    method: "POST",
+    body: JSON.stringify({ address, signature }),
+  });
 }
 
 export type Group = {
