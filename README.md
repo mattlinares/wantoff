@@ -35,8 +35,9 @@ what Mealmate is and the open "offers and wants" idea it's built on, see
    ```
    npm run dev --workspace=@mealmate/backend
    ```
-   `GET /health` should return `{"status":"ok"}`. Default port 3000 — set
-   `PORT` in `apps/backend/.env` if that's taken locally too.
+   `GET /health` should return `{"status":"ok"}`. Runs on port **3001**
+   locally (3000 is used by OrbStack — set `PORT` in `apps/backend/.env`
+   to change).
 
 6. Run Wantoff (Next.js):
    ```
