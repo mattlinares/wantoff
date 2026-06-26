@@ -31,8 +31,8 @@ export default function GroupsPage() {
 
   return (
     <main className="container">
-      <h1>Groups</h1>
-      <p>Communities where members share wants &amp; offers.</p>
+      <h1>Communities</h1>
+      <p>Groups where members share wants &amp; offers.</p>
       {token && (
         <p>
           <button onClick={() => setShowCreate((v) => !v)}>

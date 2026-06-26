@@ -206,7 +206,33 @@ lands (they use the same SDK surface; the adapter is the only difference).
 with `NEXT_PUBLIC_WALLET_MODE=embedded` for the Circles host context, once with
 `NEXT_PUBLIC_WALLET_MODE=standalone` (or unset) for the public URL.
 
-## 10. Decisions
+## 10. Channel architecture — one frontend, multiple lenses
+
+`itemType` is the natural discriminator between different "apps" on the shared
+protocol. Rather than separate frontends (Mealmate at one domain, Wantoff at
+another), **Wantoff is the meta-app** — a single Next.js codebase with one
+shared backend, where each `itemType` namespace gets its own channel page with
+an appropriate skin:
+
+| URL | Channel | itemType filter |
+|-----|---------|-----------------|
+| `/meals` | Mealmate | `mealmate.meal` |
+| `/dashboard` | All channels | (no filter — owner's own listings) |
+| `/groups/:id` | Community view | (filtered by group membership) |
+
+New item types get new channel pages as needed (`/skills`, `/tools`, etc.).
+A channel page is just `GET /listings?itemType=<x>` with a tailored UI — no
+backend changes required to add one.
+
+**Why not separate frontends?** One codebase, one deploy, one set of
+accounts. If a branded entry point is ever needed (e.g. `mealmate.com` →
+`/meals`), it's a one-line redirect — the channel page already exists.
+
+**Decision recorded 2026-06-26.** Prior alternative (Option B: separate
+frontends sharing one backend, linked to each other) was ruled out as
+unnecessary infrastructure overhead for a two-page difference.
+
+## 11. Other decisions
 
 - **Auth**: one shared `Actor`/JWT account across Mealmate and Wantoff —
   same backend, same login, different frontend domains. The backend's

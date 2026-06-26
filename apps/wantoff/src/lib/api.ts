@@ -218,3 +218,24 @@ export function removeListingFromGroup(token: string, listingId: string, groupId
 export function getListingGroups(listingId: string, token?: string) {
   return request<Group[]>(`/listings/${listingId}/groups`, token ? { token } : {});
 }
+
+// Fetch open listings by itemType — used by channel pages (e.g. /meals).
+export function getListingsByType(itemType: string, token?: string) {
+  return request<Listing[]>(`/listings?itemType=${encodeURIComponent(itemType)}`, token ? { token } : {});
+}
+
+// Join a mealmate.meal listing (credit-checked, capacity-aware).
+export function joinMealListing(token: string, listingId: string) {
+  return request<{ exchangeId: string; status: string; platformFee: unknown }>(
+    `/listings/${listingId}/join`,
+    { method: "POST", token },
+  );
+}
+
+// Express interest in any non-mealmate.meal listing — creates a PENDING exchange.
+export function requestListing(token: string, listingId: string, message?: string) {
+  return request<{ exchangeId: string; status: string }>(
+    `/listings/${listingId}/request`,
+    { method: "POST", token, body: JSON.stringify({ message }) },
+  );
+}

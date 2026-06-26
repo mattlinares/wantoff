@@ -691,6 +691,51 @@ app.post("/listings/:id/join", requireAuth, async (req: AuthedRequest, res) => {
   });
 });
 
+// POST /listings/:id/request — express interest in any non-mealmate.meal listing.
+// Creates a PENDING exchange (no credit checks, no capacity decrement — those are
+// mealmate.meal concerns). Use POST /listings/:id/join for mealmate.meal.
+app.post("/listings/:id/request", requireAuth, async (req: AuthedRequest, res) => {
+  const actorId = req.actorId!;
+  const listing = await prisma.listing.findUnique({ where: { id: req.params.id } });
+  if (!listing) return res.status(404).json({ error: "listing not found" });
+  if (listing.itemType === "mealmate.meal") {
+    return res.status(400).json({ error: "use POST /listings/:id/join for mealmate.meal listings" });
+  }
+  if (listing.status !== "OPEN") return res.status(400).json({ error: "listing is not open" });
+  if (listing.actorId === actorId) return res.status(400).json({ error: "cannot request your own listing" });
+
+  const requester = await prisma.actor.findUniqueOrThrow({ where: { id: actorId } });
+  if (listing.minReputation !== null && requester.reputationScore < listing.minReputation) {
+    return res.status(403).json({ error: `this listing requires a reputation score of at least ${listing.minReputation}` });
+  }
+
+  const existing = await prisma.exchange.findFirst({
+    where: { offerListingId: listing.id, participantIds: { has: actorId } },
+  });
+  if (existing) return res.status(409).json({ error: "you have already requested this listing" });
+
+  const exchange = await prisma.$transaction(async (tx) => {
+    const created = await tx.exchange.create({
+      data: {
+        offerListingId: listing.id,
+        participantIds: [listing.actorId, actorId],
+        status: "PENDING",
+        appliedFees: [],
+      },
+    });
+    await tx.exchange.update({ where: { id: created.id }, data: { messageThreadId: created.id } });
+    const { message } = req.body ?? {};
+    if (typeof message === "string" && message.trim()) {
+      await tx.message.create({
+        data: { threadId: created.id, senderId: actorId, body: message.trim() },
+      });
+    }
+    return created;
+  });
+
+  res.status(201).json({ exchangeId: exchange.id, status: exchange.status });
+});
+
 async function loadExchangeForActor(exchangeId: string, actorId: string) {
   const exchange = await prisma.exchange.findUnique({
     where: { id: exchangeId },

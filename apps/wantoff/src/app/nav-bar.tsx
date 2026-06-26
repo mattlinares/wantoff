@@ -10,7 +10,8 @@ export function NavBar() {
     <nav className="nav">
       <Link href="/">Wantoff</Link>
       <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-        <Link href="/groups">Groups</Link>
+        <Link href="/meals">Meals</Link>
+        <Link href="/groups">Communities</Link>
         {!loading && actor && <Link href="/dashboard">My wants &amp; offers</Link>}
         {!loading && actor && <Link href={`/u/${actor.id}`}>My public profile</Link>}
         {!loading && actor && (
