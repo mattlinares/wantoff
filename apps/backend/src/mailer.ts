@@ -13,7 +13,8 @@ const transport = process.env.SMTP_HOST
     })
   : null;
 
-export async function sendMail(to: string, subject: string, text: string) {
+export async function sendMail(to: string | null, subject: string, text: string) {
+  if (!to) return; // wallet-only actors have no email
   if (!transport) {
     console.log(`[mailer] to=${to} subject="${subject}"\n${text}`);
     return;
@@ -22,14 +23,14 @@ export async function sendMail(to: string, subject: string, text: string) {
 }
 
 export const notify = {
-  newMessage: (to: { email: string; displayName: string }, from: { displayName: string }, listingTitle: string, body: string) =>
+  newMessage: (to: { email: string | null; displayName: string }, from: { displayName: string }, listingTitle: string, body: string) =>
     sendMail(
       to.email,
       `New message from ${from.displayName} about "${listingTitle}"`,
       `${from.displayName} sent you a message about "${listingTitle}":\n\n${body}\n\nReply in the Mealmate app.`,
     ),
 
-  mealJoined: (to: { email: string; displayName: string }, joiner: { displayName: string }, listingTitle: string) =>
+  mealJoined: (to: { email: string | null; displayName: string }, joiner: { displayName: string }, listingTitle: string) =>
     sendMail(
       to.email,
       `${joiner.displayName} joined your meal "${listingTitle}"`,
@@ -37,7 +38,7 @@ export const notify = {
     ),
 
   joinConfirmed: (
-    to: { email: string; displayName: string },
+    to: { email: string | null; displayName: string },
     host: { displayName: string },
     listingTitle: string,
     mealTime: string,
@@ -51,7 +52,7 @@ export const notify = {
         `This is a commitment to attend — if your plans change, message your host in the Mealmate app as soon as possible to avoid a negative review.`,
     ),
 
-  reviewReceived: (to: { email: string; displayName: string }, reviewer: { displayName: string }, score: number) =>
+  reviewReceived: (to: { email: string | null; displayName: string }, reviewer: { displayName: string }, score: number) =>
     sendMail(
       to.email,
       `${reviewer.displayName} left you a review`,
