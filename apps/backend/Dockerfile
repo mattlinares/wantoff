@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Build context: apps/backend (Railway sets root directory to this)
 
-FROM node:22-alpine AS build
+FROM node:22-slim AS build
 WORKDIR /app
 
 COPY package.json ./
@@ -13,7 +13,7 @@ RUN npm install
 RUN npx tsc -p tsconfig.json
 RUN npx prisma generate
 
-FROM node:22-alpine AS runtime
+FROM node:22-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
