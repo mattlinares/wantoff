@@ -45,7 +45,8 @@ export default function LoginPage() {
       if (typeof window === "undefined" || !window.ethereum) {
         throw new Error("No Ethereum wallet found. Install MetaMask or a Circles-compatible wallet.");
       }
-      const provider = new BrowserProvider(window.ethereum as Parameters<typeof BrowserProvider>[0]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const provider = new BrowserProvider(window.ethereum as any);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
 

@@ -33,7 +33,8 @@ export async function signLoginMessage(message: string): Promise<{ address: stri
   if (typeof window === "undefined" || !window.ethereum) {
     throw new Error("No Ethereum wallet found. Install MetaMask or another Circles-compatible wallet.");
   }
-  const provider = new (await import("ethers")).BrowserProvider(window.ethereum as Parameters<typeof import("ethers").BrowserProvider>[0]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const provider = new (await import("ethers")).BrowserProvider(window.ethereum as any);
   const signer = await provider.getSigner();
   const address = await signer.getAddress();
   const signature = await signer.signMessage(message);
