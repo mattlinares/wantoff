@@ -49,6 +49,11 @@ what Mealmate is and the open "offers and wants" idea it's built on, see
    `<iframe>` view); `/protocol` is the public protocol overview page (with
    `/protocol/detail` for full specification and Valueflows prior-art notes).
 
+   **Wallet mode**: set `NEXT_PUBLIC_WALLET_MODE=embedded` in `.env.local` to
+   run inside the Circles host app (uses `@aboutcircles/miniapp-sdk`). Default
+   (`standalone`) uses an injected browser wallet (MetaMask on Gnosis Chain).
+   See `docs/wantoff-app-plan.md` §9 for details.
+
 ## Testing
 
 Backend pure-logic helpers (fee rules, reputation math, distance/sorting)

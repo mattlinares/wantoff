@@ -180,7 +180,33 @@ Circles trust connections work) rather than just hiding the listing.
    how to add, sharing/embed, Valueflows prior-art). Linked from a sitewide
    footer ("About the protocol").
 
-## 9. Decisions
+## 9. Wallet modes: embedded vs standalone
+
+The Circles SDK integration (`apps/wantoff/src/lib/circles.ts`) supports two
+wallet modes, controlled by `NEXT_PUBLIC_WALLET_MODE` at build time:
+
+- **`embedded`** — for running inside the Circles host application (e.g. the
+  Circles Garage competition context). Uses `@aboutcircles/miniapp-sdk`, which
+  injects the user's address and handles auth without any browser wallet
+  extension. The host app owns the connection.
+- **`standalone`** (default) — for a public web deployment. Uses an injected
+  browser wallet (MetaMask or any Circles-compatible extension) via
+  `@circles-sdk/adapter-ethers`'s `BrowserProviderContractRunner` on Gnosis
+  Chain (chain ID 100).
+
+Everything else — backend, UI, listings, trust-path gating, CRC payments,
+reputation — is identical between the two modes. The distinction is purely in
+how `connectCirclesWallet()` initialises the SDK.
+
+**Pending migration**: `@circles-sdk/sdk` is deprecated upstream in favour of
+`@aboutcircles/sdk`. Both modes should migrate when the embedded adapter work
+lands (they use the same SDK surface; the adapter is the only difference).
+
+**Deployment**: same repo, same `apps/wantoff` codebase, built twice — once
+with `NEXT_PUBLIC_WALLET_MODE=embedded` for the Circles host context, once with
+`NEXT_PUBLIC_WALLET_MODE=standalone` (or unset) for the public URL.
+
+## 10. Decisions
 
 - **Auth**: one shared `Actor`/JWT account across Mealmate and Wantoff —
   same backend, same login, different frontend domains. The backend's
