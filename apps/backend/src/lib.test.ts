@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  blendReputationScore,
   canAddToGroup,
+  circlesBonus,
   distanceKm,
   isFrequentDiner,
   nextReputationScore,
+  normaliseTrustCount,
   parseCurrencyOptions,
   parseFees,
   parseFieldSchema,
@@ -184,8 +187,37 @@ describe("parseFieldSchema", () => {
   });
 });
 
+describe("normaliseTrustCount", () => {
+  it("maps 0 trusters to 0", () => expect(normaliseTrustCount(0)).toBe(0));
+  it("maps cap trusters to 100", () => expect(normaliseTrustCount(30)).toBe(100));
+  it("clamps above cap", () => expect(normaliseTrustCount(60)).toBe(100));
+  it("maps 15 trusters to 50", () => expect(normaliseTrustCount(15)).toBe(50));
+});
+
+describe("circlesBonus", () => {
+  it("gives 0 bonus at score 0", () => expect(circlesBonus(0)).toBe(0));
+  it("gives max bonus (15) at score 100", () => expect(circlesBonus(100)).toBe(15));
+  it("gives ~3.75 at score 50 (quadratic compression)", () => expect(circlesBonus(50)).toBeCloseTo(3.75));
+  it("gives ~9.6 at score 80", () => expect(circlesBonus(80)).toBeCloseTo(9.6));
+});
+
+describe("blendReputationScore", () => {
+  it("returns local score unchanged when circlesScore is null", () =>
+    expect(blendReputationScore(50, null)).toBe(50));
+  it("returns local score unchanged when circlesScore is undefined", () =>
+    expect(blendReputationScore(50, undefined)).toBe(50));
+  it("adds quadratic bonus for high circles score", () =>
+    expect(blendReputationScore(50, 100)).toBeCloseTo(65));
+  it("barely moves score for middling circles trust", () =>
+    expect(blendReputationScore(50, 50)).toBeCloseTo(53.75));
+  it("clamps at 100", () =>
+    expect(blendReputationScore(95, 100)).toBe(100));
+  it("does not penalise low circles score", () =>
+    expect(blendReputationScore(70, 0)).toBe(70));
+});
+
 describe("serializeListing", () => {
-  const host = { id: "host-1", displayName: "Host", reputationScore: 80, circlesWallet: "0xhost" };
+  const host = { id: "host-1", displayName: "Host", reputationScore: 80, circlesScore: null, circlesWallet: "0xhost" };
   const listing = {
     id: "listing-1",
     type: "OFFER",
@@ -207,7 +239,7 @@ describe("serializeListing", () => {
       fees: [],
       currencies: [],
       minReputation: null,
-      host: { id: "host-1", displayName: "Host", reputationScore: 80, circlesWallet: "0xhost" },
+      host: { id: "host-1", displayName: "Host", reputationScore: 80, circlesWallet: "0xhost" }, // circlesScore null → no blend
     });
   });
 

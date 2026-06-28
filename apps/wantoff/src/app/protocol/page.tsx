@@ -87,6 +87,50 @@ export default function ProtocolPage() {
 
       <hr style={{ border: "none", borderTop: "1px solid #e3e0d8", marginBottom: 32 }} />
 
+      <h2 style={{ fontSize: "1.2em", marginBottom: 16 }}>Channels</h2>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: 12,
+          marginBottom: 48,
+        }}
+      >
+        {[
+          {
+            name: "Mealshare",
+            href: "/meals",
+            examples: ["Spare seats at dinner", "Homemade bread to swap", "Surplus veg from allotment", "Batch-cook trade"],
+          },
+          {
+            name: "Items",
+            href: "/items",
+            examples: ["Power drill to lend", "Bike to sell or swap", "Books to give away", "Garden tools to share"],
+          },
+          {
+            name: "Skills",
+            href: "/skills",
+            examples: ["Guitar lessons to trade", "Web design help", "Language tutoring", "Gardening advice"],
+          },
+          {
+            name: "Digital",
+            href: "/digital",
+            examples: ["Spare software licence", "Design templates", "Online course access", "Domain name to transfer"],
+          },
+        ].map((ch) => (
+          <div key={ch.name} className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <strong style={{ fontSize: "1em" }}>
+              <a href={ch.href} style={{ textDecoration: "none", color: "inherit" }}>{ch.name}</a>
+            </strong>
+            <ul style={{ margin: 0, paddingLeft: 16, color: "#555", fontSize: 13, lineHeight: 1.7 }}>
+              {ch.examples.map((e) => <li key={e}>{e}</li>)}
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      <hr style={{ border: "none", borderTop: "1px solid #e3e0d8", marginBottom: 32 }} />
+
       <p style={{ color: "#888", fontSize: 14, maxWidth: 520 }}>
         The protocol is a plain JSON/REST format — no proprietary platform, no single
         owner. Any developer can run a node, register a new item type, or build their

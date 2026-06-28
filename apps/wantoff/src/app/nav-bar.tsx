@@ -8,12 +8,10 @@ export function NavBar() {
 
   return (
     <nav className="nav">
-      <Link href="/">Wantoff</Link>
-      <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-        <Link href="/meals">Meals</Link>
+      <div>
+        <Link href="/" className="nav-brand">Wantoff</Link>
         <Link href="/groups">Communities</Link>
-        {!loading && actor && <Link href="/dashboard">My wants &amp; offers</Link>}
-        {!loading && actor && <Link href={`/u/${actor.id}`}>My public profile</Link>}
+        {!loading && actor && <Link href={`/u/${actor.id}`}>My profile</Link>}
         {!loading && actor && (
           <button
             onClick={() => {
@@ -25,6 +23,13 @@ export function NavBar() {
           </button>
         )}
         {!loading && !actor && <Link href="/login">Log in</Link>}
+      </div>
+      <div>
+        <span className="nav-channels-label">Channels</span>
+        <Link href="/meals">Mealshare</Link>
+        <Link href="/items">Items</Link>
+        <Link href="/skills">Skills</Link>
+        <Link href="/digital">Digital</Link>
       </div>
     </nav>
   );

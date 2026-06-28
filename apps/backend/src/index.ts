@@ -6,6 +6,7 @@ import { prisma } from "./prisma.js";
 import { optionalAuth, requireAuth, signToken, type AuthedRequest } from "./auth.js";
 import { notify } from "./mailer.js";
 import {
+  blendReputationScore,
   canAddToGroup,
   distanceKm,
   isFrequentDiner,
@@ -18,6 +19,7 @@ import {
   slugify,
   type Fee,
 } from "./lib.js";
+import { fetchCirclesTrustScore } from "./circles.js";
 
 const app = express();
 const port = process.env.PORT ?? 3000;
@@ -43,15 +45,17 @@ function serializeActor(actor: {
   reputationScore: number;
   reviewCount: number;
   circlesWallet: string | null;
+  circlesScore: number | null;
   location: unknown;
   credits: { creditType: string; amount: { toNumber(): number } }[];
 }) {
   return {
     id: actor.id,
     displayName: actor.displayName,
-    reputationScore: actor.reputationScore,
+    reputationScore: blendReputationScore(actor.reputationScore, actor.circlesScore),
     reviewCount: actor.reviewCount,
     circlesWallet: actor.circlesWallet,
+    circlesScore: actor.circlesScore,
     location: actor.location as { lat: number; lng: number; address?: string } | null,
     credits: Object.fromEntries(actor.credits.map((c) => [c.creditType, c.amount.toNumber()])),
   };
@@ -197,10 +201,23 @@ app.patch("/me", requireAuth, async (req: AuthedRequest, res) => {
     }
   }
 
+  const normalizedWallet = circlesWallet !== undefined
+    ? (circlesWallet === null ? null : circlesWallet.trim() || null)
+    : undefined;
+
+  // Fetch trust score from Circles network when wallet is being set/changed.
+  let newCirclesScore: number | null | undefined;
+  if (normalizedWallet) {
+    newCirclesScore = await fetchCirclesTrustScore(normalizedWallet);
+  } else if (normalizedWallet === null) {
+    newCirclesScore = null;
+  }
+
   const actor = await prisma.actor.update({
     where: { id: req.actorId },
     data: {
-      ...(circlesWallet !== undefined ? { circlesWallet: circlesWallet === null ? null : circlesWallet.trim() || null } : {}),
+      ...(normalizedWallet !== undefined ? { circlesWallet: normalizedWallet } : {}),
+      ...(newCirclesScore !== undefined ? { circlesScore: newCirclesScore } : {}),
       ...(locationData !== undefined ? { location: locationData === null ? { set: null } : locationData } : {}),
       ...(typeof displayName === "string" && displayName.trim() ? { displayName: displayName.trim() } : {}),
     },
@@ -355,12 +372,42 @@ app.get("/listings", optionalAuth, async (req: AuthedRequest, res) => {
   // Meals the viewer has joined stay visible even after they close (full),
   // so the viewer can still see/refer back to meals they're committed to.
   let joinedListingIds: string[] = [];
+  let myGroupListingIds: Set<string> = new Set();
+  const listingGroupName = new Map<string, string | null>();
   if (req.actorId) {
-    const joinedExchanges = await prisma.exchange.findMany({
-      where: { participantIds: { has: req.actorId }, offerListing: { actorId: { not: req.actorId } } },
-      select: { offerListingId: true },
-    });
+    const [joinedExchanges, myMemberships] = await Promise.all([
+      prisma.exchange.findMany({
+        where: { participantIds: { has: req.actorId }, offerListing: { actorId: { not: req.actorId } } },
+        select: { offerListingId: true },
+      }),
+      prisma.groupMembership.findMany({
+        where: { actorId: req.actorId },
+        select: { groupId: true },
+      }),
+    ]);
     joinedListingIds = joinedExchanges.map((e) => e.offerListingId);
+
+    if (myMemberships.length > 0) {
+      const myGroupIds = myMemberships.map((m) => m.groupId);
+      const [groupListings, myGroups] = await Promise.all([
+        prisma.listingGroup.findMany({
+          where: { groupId: { in: myGroupIds } },
+          select: { listingId: true, groupId: true },
+        }),
+        prisma.group.findMany({
+          where: { id: { in: myGroupIds } },
+          select: { id: true, name: true },
+        }),
+      ]);
+      const groupNameById = new Map(myGroups.map((g) => [g.id, g.name]));
+      // Map each listing to the first matching group name (stable: groups returned in DB order).
+      for (const lg of groupListings) {
+        if (!listingGroupName.has(lg.listingId)) {
+          listingGroupName.set(lg.listingId, groupNameById.get(lg.groupId) ?? null);
+        }
+      }
+      myGroupListingIds = new Set(groupListings.map((lg) => lg.listingId));
+    }
   }
 
   const listings = await prisma.listing.findMany({
@@ -385,16 +432,21 @@ app.get("/listings", optionalAuth, async (req: AuthedRequest, res) => {
     return serializeListing(listing, listing.actor, {
       distanceKm: distanceKmFromViewer,
       joinedByMe: joinedListingIdSet.has(listing.id),
+      inMyGroups: myGroupListingIds.has(listing.id),
+      communityName: listingGroupName.get(listing.id) ?? null,
     });
   });
 
-  // Meals the viewer has joined are boosted to the very top. Within that,
-  // when the viewer's location is known, nearby meals are boosted next
-  // (within a radius), sorted by distance; everything else keeps the
-  // reputation/recency order computed above (stable sort).
+  // Sort priority: joined > community listings > other people's > own (at bottom).
   const NEARBY_RADIUS_KM = 25;
   serialized.sort((a, b) => {
     if (a.joinedByMe !== b.joinedByMe) return a.joinedByMe ? -1 : 1;
+    // Own listings are demoted to the bottom of the feed (dashboard covers them).
+    const aOwn = req.actorId ? a.host.id === req.actorId : false;
+    const bOwn = req.actorId ? b.host.id === req.actorId : false;
+    if (aOwn !== bOwn) return aOwn ? 1 : -1;
+    // Listings from the viewer's communities come before everything else.
+    if (a.inMyGroups !== b.inMyGroups) return a.inMyGroups ? -1 : 1;
     if (viewerLocation) {
       const aDist = a.distanceKm ?? null;
       const bDist = b.distanceKm ?? null;
@@ -407,6 +459,15 @@ app.get("/listings", optionalAuth, async (req: AuthedRequest, res) => {
   });
 
   res.json(serialized);
+});
+
+app.get("/listings/:id", optionalAuth, async (req: AuthedRequest, res) => {
+  const listing = await prisma.listing.findUnique({
+    where: { id: req.params.id },
+    include: { actor: true },
+  });
+  if (!listing) return res.status(404).json({ error: "listing not found" });
+  res.json(serializeListing(listing, listing.actor));
 });
 
 app.post("/listings", requireAuth, async (req: AuthedRequest, res) => {
@@ -600,12 +661,15 @@ app.get("/actors/:id/public-profile", async (req, res) => {
     orderBy: { createdAt: "desc" },
   });
 
+  const loc = actor.location as { lat: number; lng: number; address?: string } | null;
   res.json({
     id: actor.id,
     displayName: actor.displayName,
-    reputationScore: actor.reputationScore,
+    reputationScore: blendReputationScore(actor.reputationScore, actor.circlesScore),
     reviewCount: actor.reviewCount,
     circlesWallet: actor.circlesWallet,
+    circlesScore: actor.circlesScore,
+    location: loc ?? null,
     listings: listings.map((listing) => serializeListing(listing, actor)),
   });
 });

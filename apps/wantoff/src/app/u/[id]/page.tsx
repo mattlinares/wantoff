@@ -1,10 +1,36 @@
-import { getPublicProfile, type Fee, type Listing } from "@/lib/api";
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
+import {
+  getPublicProfile,
+  getMyListings,
+  getGroups,
+  addListingToGroup,
+  removeListingFromGroup,
+  updateListing,
+  type PublicProfile,
+  type Listing,
+  type Fee,
+  type Group,
+} from "@/lib/api";
 import { PayInCrc } from "./pay-in-crc";
 import { ReputationBadge, ReputationGate } from "@/lib/reputation";
 import { TrustSignal } from "./trust-signal";
+import { WalletConnect } from "./wallet-connect";
+
+const STATUS_LABELS: Record<string, string> = {
+  OPEN: "Open",
+  MATCHED: "Matched",
+  CLOSED: "Closed",
+  CANCELLED: "Cancelled",
+};
+const STATUS_ORDER = ["OPEN", "MATCHED", "CLOSED", "CANCELLED"];
 
 function listingTitle(listing: Listing): string {
-  const attrs = listing.attributes as { title?: unknown; description?: unknown };
+  const attrs = listing.attributes as { title?: unknown };
   return typeof attrs.title === "string" ? attrs.title : `${listing.itemType} listing`;
 }
 
@@ -20,83 +46,275 @@ function describeFee(fee: Fee): string {
   }
   const currency = fee.currency ?? "currency";
   const amount = fee.amount !== undefined ? ` (${fee.amount} ${currency})` : ` in ${currency}`;
-  if (fee.kind === "donation") {
-    return `Suggested tip${amount}`;
-  }
+  if (fee.kind === "donation") return `Suggested tip${amount}`;
   return `${fee.required ? "Requires payment" : "Suggested payment"}${amount}`;
 }
 
-// CRC wallet for this listing, if it accepts CRC — used for the "tip in CRC" link.
 function crcWalletFor(listing: Listing): string | null {
   const crc = listing.currencies.find((c) => c.currency === "CRC" && c.walletAddress);
   return crc?.walletAddress ?? listing.host.circlesWallet ?? null;
 }
 
-export default async function PublicProfilePage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ embed?: string }>;
-}) {
-  const { id } = await params;
-  const { embed } = await searchParams;
-  const profile = await getPublicProfile(id).catch(() => null);
+function ShareProfile({ actorId }: { actorId: string }) {
+  const [copied, setCopied] = useState(false);
+  const url = typeof window !== "undefined" ? `${window.location.origin}/u/${actorId}?embed=1` : "";
+  const snippet = `<iframe src="${url}" style="width:100%;border:0;height:480px"></iframe>`;
 
-  if (!profile) {
-    return (
-      <main className="container">
-        <p>Profile not found.</p>
-      </main>
-    );
+  async function copy() {
+    await navigator.clipboard.writeText(snippet);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
-  // embed=1 strips chrome for compact <iframe> use (docs/wantoff-app-plan.md section 3).
-  const isEmbed = embed === "1";
+  return (
+    <div className="card" style={{ marginBottom: 24 }}>
+      <h3 style={{ marginTop: 0 }}>Share your profile</h3>
+      <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--muted)" }}>Embed your public wants &amp; offers on another site:</p>
+      <textarea readOnly rows={2} value={snippet} style={{ width: "100%", fontSize: 12 }} />
+      <p style={{ margin: "8px 0 0" }}>
+        <button onClick={copy}>{copied ? "Copied!" : "Copy embed code"}</button>
+      </p>
+    </div>
+  );
+}
+
+function ListingGroupManager({ token, listingId, myGroups }: { token: string; listingId: string; myGroups: Group[] }) {
+  const [inGroups, setInGroups] = useState<Set<string>>(new Set());
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    import("@/lib/api").then(({ getListingGroups }) =>
+      getListingGroups(listingId, token)
+        .then((gs) => { setInGroups(new Set(gs.map((g) => g.id))); setLoaded(true); })
+        .catch(() => setLoaded(true)),
+    );
+  }, [listingId, token]);
+
+  async function toggle(groupId: string) {
+    setBusy(groupId);
+    setError(null);
+    try {
+      if (inGroups.has(groupId)) {
+        await removeListingFromGroup(token, listingId, groupId);
+        setInGroups((prev) => { const s = new Set(prev); s.delete(groupId); return s; });
+      } else {
+        await addListingToGroup(token, listingId, groupId);
+        setInGroups((prev) => new Set([...prev, groupId]));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (!loaded) return null;
 
   return (
-    <>
-      {isEmbed && <style>{".nav { display: none; }"}</style>}
-      <main className="container" style={isEmbed ? { paddingTop: 0 } : undefined}>
-        <h1>{profile.displayName}</h1>
-        <p>
-          <ReputationBadge score={profile.reputationScore} reviewCount={profile.reviewCount} />
-        </p>
-        {profile.circlesWallet && (
-          <p style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <TrustSignal hostWallet={profile.circlesWallet} />
-            <span style={{ color: "#aaa", fontSize: "0.85em" }}>
-              wallet: <code>{profile.circlesWallet.slice(0, 8)}…</code>
-            </span>
+    <div style={{ marginTop: 8, fontSize: "0.85em" }}>
+      <span style={{ color: "var(--muted)" }}>Groups: </span>
+      {myGroups.map((g) => (
+        <button
+          key={g.id}
+          onClick={() => toggle(g.id)}
+          disabled={busy === g.id}
+          style={{
+            marginRight: 4,
+            marginBottom: 4,
+            padding: "2px 8px",
+            fontSize: "0.85em",
+            color: "var(--text)",
+            background: inGroups.has(g.id) ? "#22c55e22" : "var(--surface)",
+            borderColor: inGroups.has(g.id) ? "#22c55e" : "var(--border)",
+          }}
+        >
+          {inGroups.has(g.id) ? "✓ " : "+ "}{g.name}
+        </button>
+      ))}
+      {error && <span className="error" style={{ marginLeft: 4 }}>{error}</span>}
+    </div>
+  );
+}
+
+export default function PublicProfilePage() {
+  const { id } = useParams<{ id: string }>();
+  const { actor, token } = useAuth();
+  const isOwner = actor?.id === id;
+
+  const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [myListings, setMyListings] = useState<Listing[] | null>(null);
+  const [myGroups, setMyGroups] = useState<Group[]>([]);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getPublicProfile(id)
+      .then(setProfile)
+      .catch(() => setNotFound(true));
+  }, [id]);
+
+  useEffect(() => {
+    if (!isOwner || !token) return;
+    getMyListings(token).then(setMyListings).catch(() => {});
+    getGroups(token).then((gs) => setMyGroups(gs.filter((g) => g.myRole))).catch(() => {});
+  }, [isOwner, token]);
+
+  async function onCancel(listingId: string) {
+    if (!token) return;
+    setCancellingId(listingId);
+    setCancelError(null);
+    try {
+      const updated = await updateListing(token, listingId, { status: "CANCELLED" });
+      setMyListings((prev) => prev?.map((l) => (l.id === listingId ? updated : l)) ?? null);
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : "failed to cancel");
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
+  if (notFound) return <main className="container"><p>Profile not found.</p></main>;
+  if (!profile) return <main className="container"><p>Loading...</p></main>;
+
+  return (
+    <main className="container">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h1 style={{ margin: "0 0 4px" }}>{profile.displayName}</h1>
+          <p style={{ margin: 0 }}>
+            <ReputationBadge score={profile.reputationScore} reviewCount={profile.reviewCount} />
+          </p>
+        </div>
+        {isOwner && (
+          <Link href={`/u/${id}/edit`} style={{ fontSize: 13, color: "var(--muted)", marginTop: 6 }}>
+            Edit profile
+          </Link>
+        )}
+      </div>
+
+      {profile.location?.address && (
+        <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--muted)" }}>📍 {profile.location.address}</p>
+      )}
+
+      {isOwner && <div style={{ marginTop: 20 }}><ShareProfile actorId={id} /></div>}
+
+      <section
+        id="circles-trust"
+        className="circles-trust-section"
+        style={{ margin: "24px 0", padding: "20px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)" }}
+      >
+        <h2 style={{ marginTop: 0, marginBottom: 8, fontSize: "1.1em" }}>Circles trust</h2>
+        {profile.circlesWallet ? (
+          <>
+            <p style={{ margin: "0 0 12px", fontSize: 14, color: "var(--muted)" }}>
+              Shows how you&apos;re connected through the Circles trust network. Trust connections contribute to{" "}
+              <Link href="/reputation">reputation scores</Link>.
+            </p>
+            {profile.circlesScore !== null && (
+              <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--muted)" }}>
+                Circles trust score:{" "}
+                <strong style={{ color: "var(--text)" }}>{Math.round(profile.circlesScore)}</strong>/100
+                {" "}· adds up to{" "}
+                <strong style={{ color: "var(--text)" }}>
+                  +{Math.round(Math.pow(profile.circlesScore / 100, 2) * 15 * 10) / 10}
+                </strong>{" "}
+                pts to reputation
+              </p>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <TrustSignal hostWallet={profile.circlesWallet} />
+              <span style={{ color: "#aaa", fontSize: "0.85em" }}>
+                wallet: <code>{profile.circlesWallet.slice(0, 8)}…</code>
+              </span>
+            </div>
+          </>
+        ) : (
+          <p style={{ margin: 0, fontSize: 14, color: "var(--muted)" }}>
+            {isOwner
+              ? "Connect a Circles wallet to show your trust connections and boost your reputation."
+              : "This person hasn't connected a Circles wallet yet."}
           </p>
         )}
-        <h2>Open wants &amp; offers</h2>
-        {profile.listings.length === 0 && <p>Nothing listed right now.</p>}
-        {profile.listings.map((listing) => {
-          const wallet = crcWalletFor(listing);
-          return (
-            <div className="card" key={listing.id}>
-              <span className="badge">{listing.type}</span> <span className="badge">{listing.itemType}</span>
-              <h3 style={{ margin: "8px 0" }}>{listingTitle(listing)}</h3>
-              {listingDescription(listing) && <p>{listingDescription(listing)}</p>}
-              {listing.minReputation !== null && <p><ReputationGate minReputation={listing.minReputation} /></p>}
-              {listing.fees.length > 0 && (
-                <ul>
-                  {listing.fees.map((fee, i) => (
-                    <li key={i}>{describeFee(fee)}</li>
-                  ))}
-                </ul>
-              )}
-              {wallet && (
-                <PayInCrc
-                  wallet={wallet}
-                  defaultAmount={listing.fees.find((f) => f.kind !== "credit" && f.currency === "CRC")?.amount}
-                />
-              )}
-            </div>
-          );
-        })}
-      </main>
-    </>
+        {isOwner && <div style={{ marginTop: 16 }}><WalletConnect circlesWallet={profile.circlesWallet} /></div>}
+      </section>
+
+      {isOwner ? (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+            <h2 style={{ margin: 0 }}>My wants &amp; offers</h2>
+            <Link href="/listings/new">+ Add listing</Link>
+          </div>
+          {cancelError && <p className="error">{cancelError}</p>}
+          {myListings === null && <p>Loading...</p>}
+          {myListings !== null && myListings.length === 0 && <p>You haven&apos;t listed anything yet.</p>}
+          {myListings !== null && STATUS_ORDER.map((status) => {
+            const group = myListings.filter((l) => l.status === status);
+            if (group.length === 0) return null;
+            return (
+              <section key={status}>
+                <h3 style={{ margin: "20px 0 8px", fontSize: "0.9em", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)" }}>
+                  {STATUS_LABELS[status]}
+                </h3>
+                {group.map((listing) => (
+                  <div className={`card card-${listing.type.toLowerCase()}`} key={listing.id}>
+                    <span className="badge">{listing.type}</span>{" "}
+                    <span className="badge">{listing.itemType}</span>
+                    <h3 style={{ margin: "8px 0" }}>
+                      <Link href={`/listings/${listing.id}`} style={{ color: "var(--text)", textDecoration: "none" }}>
+                        {listingTitle(listing)}
+                      </Link>
+                    </h3>
+                    {listing.minReputation !== null && <p><ReputationGate minReputation={listing.minReputation} /></p>}
+                    {myGroups.length > 0 && token && (
+                      <ListingGroupManager token={token} listingId={listing.id} myGroups={myGroups} />
+                    )}
+                    {listing.status === "OPEN" && (
+                      <button
+                        onClick={() => onCancel(listing.id)}
+                        disabled={cancellingId === listing.id}
+                        style={{ marginTop: 8 }}
+                      >
+                        {cancellingId === listing.id ? "Cancelling..." : "Cancel listing"}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </section>
+            );
+          })}
+        </>
+      ) : (
+        <>
+          <h2>Open wants &amp; offers</h2>
+          {profile.listings.length === 0 && <p>Nothing listed right now.</p>}
+          {profile.listings.map((listing) => {
+            const wallet = crcWalletFor(listing);
+            return (
+              <div className={`card card-${listing.type.toLowerCase()}`} key={listing.id}>
+                <span className="badge">{listing.type}</span>{" "}
+                <span className="badge">{listing.itemType}</span>
+                <h3 style={{ margin: "8px 0" }}>{listingTitle(listing)}</h3>
+                {listingDescription(listing) && <p>{listingDescription(listing)}</p>}
+                {listing.minReputation !== null && <p><ReputationGate minReputation={listing.minReputation} /></p>}
+                {listing.fees.length > 0 && (
+                  <ul>
+                    {listing.fees.map((fee, i) => <li key={i}>{describeFee(fee)}</li>)}
+                  </ul>
+                )}
+                {wallet && (
+                  <PayInCrc
+                    wallet={wallet}
+                    defaultAmount={listing.fees.find((f) => f.kind !== "credit" && f.currency === "CRC")?.amount}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </>
+      )}
+    </main>
   );
 }

@@ -91,12 +91,12 @@ post "/groups/$GROUP_ID/join" '{}' "$TOK_C" >/dev/null && ok "Carmen joined"
 step "Alice's listings"
 
 L_A1=$(post /listings \
-  '{"itemType":"wantoff.other","title":"Hot desk for the day","description":"Spare a desk at the Hub. Drop in, plug in, get things done. Message first to check availability.","fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
+  '{"itemType":"wantoff.other","title":"Hot desk for the day","description":"Spare a desk at the Hub. Drop in, plug in, get things done. Message first to check availability.","attributes":{"photos":["https://picsum.photos/seed/desk1/800/500"]},"fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
   "$TOK_A")
 L_A1_ID=$(echo "$L_A1" | jq -r '.id'); ok "Hot desk (free) -> $L_A1_ID"
 
 L_A2=$(post /listings \
-  '{"itemType":"wantoff.other","title":"Python coaching session","description":"1hr pairing session on anything Python. Beginner to intermediate. Data wrangling, automation, web scraping.","fees":[{"scope":"user","kind":"currency","currency":"CRC","amount":5,"required":true}],"currencies":[{"currency":"CRC"}]}' \
+  '{"itemType":"wantoff.other","title":"Python coaching session","description":"1hr pairing session on anything Python. Beginner to intermediate. Data wrangling, automation, web scraping.","attributes":{"photos":["https://picsum.photos/seed/code2/800/500"]},"fees":[{"scope":"user","kind":"currency","currency":"CRC","amount":5,"required":true}],"currencies":[{"currency":"CRC"}]}' \
   "$TOK_A")
 L_A2_ID=$(echo "$L_A2" | jq -r '.id'); ok "Python coaching (5 CRC) -> $L_A2_ID"
 
@@ -108,42 +108,88 @@ L_A3_ID=$(echo "$L_A3" | jq -r '.id'); ok "Sri Lankan lunch (mealmate, free) -> 
 step "Bob's listings"
 
 L_B1=$(post /listings \
-  '{"itemType":"wantoff.other","title":"Bicycle tune-up","description":"Brakes, gears, chain clean, tyre pressure. Bring your bike to the Hub yard on a Thursday.","fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
+  '{"itemType":"wantoff.other","title":"Bicycle tune-up","description":"Brakes, gears, chain clean, tyre pressure. Bring your bike to the Hub yard on a Thursday.","attributes":{"photos":["https://picsum.photos/seed/bike4/800/500"]},"fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
   "$TOK_B")
 L_B1_ID=$(echo "$L_B1" | jq -r '.id'); ok "Bicycle tune-up (free) -> $L_B1_ID"
 
 L_B2=$(post /listings \
-  '{"itemType":"wantoff.other","title":"Brand identity design","description":"Logo, palette, one-pager. Good fit for co-ops, community projects, or side projects needing a visual identity.","fees":[{"scope":"user","kind":"currency","currency":"CRC","amount":10,"required":true}],"currencies":[{"currency":"CRC"}]}' \
+  '{"itemType":"wantoff.other","title":"Brand identity design","description":"Logo, palette, one-pager. Good fit for co-ops, community projects, or side projects needing a visual identity.","attributes":{"photos":["https://picsum.photos/seed/design5/800/500"]},"fees":[{"scope":"user","kind":"currency","currency":"CRC","amount":10,"required":true}],"currencies":[{"currency":"CRC"}]}' \
   "$TOK_B")
 L_B2_ID=$(echo "$L_B2" | jq -r '.id'); ok "Brand identity design (10 CRC) -> $L_B2_ID"
 
 L_B3=$(post /listings \
-  '{"itemType":"wantoff.other","title":"Fresh sourdough loaf","description":"Bake day is Sunday. Order by Friday. White or seeded. Just say the word.","fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
+  '{"itemType":"wantoff.other","title":"Fresh sourdough loaf","description":"Bake day is Sunday. Order by Friday. White or seeded. Just say the word.","attributes":{"photos":["https://picsum.photos/seed/bread6/800/500"]},"fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
   "$TOK_B")
 L_B3_ID=$(echo "$L_B3" | jq -r '.id'); ok "Sourdough loaf (free) -> $L_B3_ID"
 
 step "Carmen's listings"
 
 L_C1=$(post /listings \
-  '{"itemType":"wantoff.other","title":"Spanish conversation hour","description":"Practice your Spanish in a relaxed setting. All levels. Grammar questions welcome.","fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
+  '{"itemType":"wantoff.other","title":"Spanish conversation hour","description":"Practice your Spanish in a relaxed setting. All levels. Grammar questions welcome.","attributes":{"photos":["https://picsum.photos/seed/lang7/800/500"]},"fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
   "$TOK_C")
 L_C1_ID=$(echo "$L_C1" | jq -r '.id'); ok "Spanish conversation (free) -> $L_C1_ID"
 
 L_C2=$(post /listings \
-  '{"itemType":"wantoff.other","title":"Yoga class (1hr)","description":"Hatha-based, suitable for all levels. Mat provided. Hub common room, Tuesday mornings.","fees":[{"scope":"user","kind":"currency","currency":"CRC","amount":3,"required":true}],"currencies":[{"currency":"CRC"}]}' \
+  '{"itemType":"wantoff.other","title":"Yoga class (1hr)","description":"Hatha-based, suitable for all levels. Mat provided. Hub common room, Tuesday mornings.","attributes":{"photos":["https://picsum.photos/seed/yoga8/800/500"]},"fees":[{"scope":"user","kind":"currency","currency":"CRC","amount":3,"required":true}],"currencies":[{"currency":"CRC"}]}' \
   "$TOK_C")
 L_C2_ID=$(echo "$L_C2" | jq -r '.id'); ok "Yoga class (3 CRC) -> $L_C2_ID"
 
 L_C3=$(post /listings \
-  '{"itemType":"wantoff.other","title":"Kombucha SCOBY to share","description":"Have a healthy SCOBY ready to go. Bring a jar and I will get you started.","fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
+  '{"itemType":"wantoff.other","title":"Kombucha SCOBY to share","description":"Have a healthy SCOBY ready to go. Bring a jar and I will get you started.","attributes":{"photos":["https://picsum.photos/seed/scoby9/800/500"]},"fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
   "$TOK_C")
 L_C3_ID=$(echo "$L_C3" | jq -r '.id'); ok "Kombucha SCOBY (free, NOT in community) -> $L_C3_ID"
+
+step "Items listings"
+
+L_ITEMS1=$(post /listings \
+  '{"itemType":"wantoff.items","title":"Power drill to lend","description":"Bosch 18V cordless drill, two batteries. Borrow for a weekend, just return it clean.","attributes":{"photos":["https://picsum.photos/seed/drill42/800/500"]},"fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
+  "$TOK_B")
+L_ITEMS1_ID=$(echo "$L_ITEMS1" | jq -r '.id'); ok "Power drill (lend, free) -> $L_ITEMS1_ID"
+
+L_ITEMS2=$(post /listings \
+  '{"itemType":"wantoff.items","title":"Box of books to rehome","description":"Mix of fiction and non-fiction — take one, take all. Mainly literary fiction and popular science.","attributes":{"photos":["https://picsum.photos/seed/books19/800/500"]},"fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
+  "$TOK_C")
+L_ITEMS2_ID=$(echo "$L_ITEMS2" | jq -r '.id'); ok "Box of books (free) -> $L_ITEMS2_ID"
+
+step "Skills listings"
+
+L_SKILLS1=$(post /listings \
+  '{"itemType":"wantoff.skills","title":"Web design session","description":"1hr session on layout, typography, or basic CSS. Good for small projects or freelancers getting started.","attributes":{"duration":60,"photos":["https://picsum.photos/seed/webdes10/800/500"]},"fees":[{"scope":"user","kind":"currency","currency":"CRC","amount":4,"required":true}],"currencies":[{"currency":"CRC"}]}' \
+  "$TOK_A")
+L_SKILLS1_ID=$(echo "$L_SKILLS1" | jq -r '.id'); ok "Web design session (60min, 4 CRC) -> $L_SKILLS1_ID"
+
+L_SKILLS2=$(post /listings \
+  '{"itemType":"wantoff.skills","title":"Bicycle repair lesson","description":"Learn to fix a puncture, adjust brakes, and tune gears yourself. Bring your bike to the Hub yard.","attributes":{"duration":90,"photos":["https://picsum.photos/seed/bicycle77/800/500"]},"fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
+  "$TOK_B")
+L_SKILLS2_ID=$(echo "$L_SKILLS2" | jq -r '.id'); ok "Bicycle repair lesson (90min, free) -> $L_SKILLS2_ID"
+
+L_SKILLS3=$(post /listings \
+  '{"itemType":"wantoff.skills","title":"Spanish conversation hour","description":"Practice your Spanish in a relaxed setting. All levels welcome, grammar questions fine.","attributes":{"duration":60,"photos":["https://picsum.photos/seed/span11/800/500"]},"fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
+  "$TOK_C")
+L_SKILLS3_ID=$(echo "$L_SKILLS3" | jq -r '.id'); ok "Spanish conversation (60min, free) -> $L_SKILLS3_ID"
+
+L_SKILLS4=$(post /listings \
+  '{"itemType":"wantoff.skills","title":"Python coaching","description":"1hr pairing session on anything Python — data wrangling, automation, web scraping. Beginner to intermediate.","attributes":{"duration":60,"photos":["https://picsum.photos/seed/pyth12/800/500"]},"fees":[{"scope":"user","kind":"currency","currency":"CRC","amount":5,"required":true}],"currencies":[{"currency":"CRC"}]}' \
+  "$TOK_A")
+L_SKILLS4_ID=$(echo "$L_SKILLS4" | jq -r '.id'); ok "Python coaching (60min, 5 CRC) -> $L_SKILLS4_ID"
+
+step "Digital listings"
+
+L_DIGITAL1=$(post /listings \
+  '{"itemType":"wantoff.digital","title":"Spare Figma seat","description":"Have a spare seat on a team plan until end of year. First come first served.","attributes":{"photos":["https://picsum.photos/seed/figma13/800/500"]},"fees":[{"scope":"user","kind":"donation","required":false}],"currencies":[]}' \
+  "$TOK_A")
+L_DIGITAL1_ID=$(echo "$L_DIGITAL1" | jq -r '.id'); ok "Spare Figma seat (free) -> $L_DIGITAL1_ID"
+
+L_DIGITAL2=$(post /listings \
+  '{"itemType":"wantoff.digital","title":"Notion template pack","description":"Six templates for project tracking, meeting notes, and personal journaling. Download link on exchange.","attributes":{"photos":["https://picsum.photos/seed/notion14/800/500"]},"fees":[{"scope":"user","kind":"currency","currency":"CRC","amount":2,"required":true}],"currencies":[{"currency":"CRC"}]}' \
+  "$TOK_C")
+L_DIGITAL2_ID=$(echo "$L_DIGITAL2" | jq -r '.id'); ok "Notion template pack (2 CRC) -> $L_DIGITAL2_ID"
 
 # ── 6. Add listings to community ──────────────────────────────────────────────
 # mealmate.meal (L_A3) and Carmen's SCOBY (L_C3) intentionally excluded.
 step "Adding listings to community"
 
-for entry in "$L_A1_ID:$TOK_A" "$L_A2_ID:$TOK_A" "$L_B1_ID:$TOK_B" "$L_B2_ID:$TOK_B" "$L_B3_ID:$TOK_B" "$L_C1_ID:$TOK_C" "$L_C2_ID:$TOK_C"; do
+for entry in "$L_A1_ID:$TOK_A" "$L_A2_ID:$TOK_A" "$L_B1_ID:$TOK_B" "$L_B2_ID:$TOK_B" "$L_B3_ID:$TOK_B" "$L_C1_ID:$TOK_C" "$L_C2_ID:$TOK_C" "$L_ITEMS1_ID:$TOK_B" "$L_ITEMS2_ID:$TOK_C" "$L_SKILLS1_ID:$TOK_A" "$L_SKILLS2_ID:$TOK_B" "$L_SKILLS3_ID:$TOK_C" "$L_SKILLS4_ID:$TOK_A" "$L_DIGITAL1_ID:$TOK_A" "$L_DIGITAL2_ID:$TOK_C"; do
   LID="${entry%%:*}"
   TOK="${entry##*:}"
   post "/listings/$LID/groups/$GROUP_ID" '{}' "$TOK" >/dev/null

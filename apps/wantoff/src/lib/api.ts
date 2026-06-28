@@ -9,6 +9,7 @@ export type Actor = {
   reputationScore: number;
   reviewCount: number;
   circlesWallet: string | null;
+  circlesScore: number | null;
   location: { lat: number; lng: number; address?: string } | null;
   credits: Record<string, number>;
 };
@@ -40,6 +41,8 @@ export type Listing = {
   currencies: CurrencyOption[];
   minReputation: number | null;
   joinedByMe?: boolean;
+  inMyGroups?: boolean;
+  communityName?: string | null;
   host: { id: string; displayName: string; reputationScore: number; circlesWallet: string | null };
 };
 
@@ -49,6 +52,8 @@ export type PublicProfile = {
   reputationScore: number;
   reviewCount: number;
   circlesWallet: string | null;
+  circlesScore: number | null;
+  location: { lat: number; lng: number; address?: string } | null;
   listings: Listing[];
 };
 
@@ -115,8 +120,12 @@ export function getMyListings(token: string) {
 
 // Public feed of open listings (offers and wants) across all itemTypes —
 // used as a "what's out there" sample on the landing page.
-export function getListings() {
-  return request<Listing[]>("/listings");
+export function getListings(token?: string) {
+  return request<Listing[]>("/listings", token ? { token } : {});
+}
+
+export function getListing(id: string, token?: string) {
+  return request<Listing>(`/listings/${id}`, token ? { token } : {});
 }
 
 export function getItemTypeTemplates() {
@@ -151,7 +160,14 @@ export function getPublicProfile(id: string) {
   return request<PublicProfile>(`/actors/${id}/public-profile`);
 }
 
-export function updateMe(token: string, body: { circlesWallet?: string | null; displayName?: string }) {
+export function updateMe(
+  token: string,
+  body: {
+    circlesWallet?: string | null;
+    displayName?: string;
+    location?: { lat: number; lng: number; address?: string } | null;
+  },
+) {
   return request<Actor>("/me", { method: "PATCH", token, body: JSON.stringify(body) });
 }
 

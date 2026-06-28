@@ -22,6 +22,33 @@ export function nextReputationScore(currentScore: number, reviewScore: number, w
   return Math.min(100, Math.max(0, currentScore + delta));
 }
 
+// ── Circles trust blend ───────────────────────────────────────────────────────
+
+// Raw trust count ceiling: 30 trusting accounts → normalised score of 100.
+export const CIRCLES_TRUST_CAP = 30;
+
+export function normaliseTrustCount(count: number): number {
+  return Math.min(100, (count / CIRCLES_TRUST_CAP) * 100);
+}
+
+// Quadratic bonus so only genuinely high Circles scores contribute meaningfully.
+// Max bonus: +15 pts. circles=50→+3.75, circles=80→+9.6, circles=100→+15.
+export const CIRCLES_MAX_BONUS = 15;
+
+export function circlesBonus(circlesScore: number): number {
+  return Math.pow(circlesScore / 100, 2) * CIRCLES_MAX_BONUS;
+}
+
+// Returns the final displayed reputation score.
+// If no circlesScore is stored (wallet not connected / fetch failed) the
+// local score is returned unchanged.
+export function blendReputationScore(localScore: number, circlesScore: number | null | undefined): number {
+  if (circlesScore == null) return localScore;
+  return Math.min(100, localScore + circlesBonus(circlesScore));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // True if this join would be the actor's >1st meal this week, after they
 // already ate >1 meal last week — i.e. >1 meal/week for >1 consecutive week.
 export function isFrequentDiner(thisWeekCount: number, lastWeekCount: number) {
@@ -181,8 +208,8 @@ export function serializeListing(
     currencies: unknown;
     minReputation: number | null;
   },
-  host: { id: string; displayName: string; reputationScore: number; circlesWallet: string | null },
-  extra?: { distanceKm?: number | null; joinedByMe?: boolean },
+  host: { id: string; displayName: string; reputationScore: number; circlesScore: number | null; circlesWallet: string | null },
+  extra?: { distanceKm?: number | null; joinedByMe?: boolean; inMyGroups?: boolean; communityName?: string | null },
 ) {
   return {
     id: listing.id,
@@ -195,10 +222,12 @@ export function serializeListing(
     minReputation: listing.minReputation,
     ...(extra?.distanceKm !== undefined ? { distanceKm: extra.distanceKm } : {}),
     ...(extra?.joinedByMe !== undefined ? { joinedByMe: extra.joinedByMe } : {}),
+    ...(extra?.inMyGroups !== undefined ? { inMyGroups: extra.inMyGroups } : {}),
+    ...(extra?.communityName !== undefined ? { communityName: extra.communityName } : {}),
     host: {
       id: host.id,
       displayName: host.displayName,
-      reputationScore: host.reputationScore,
+      reputationScore: blendReputationScore(host.reputationScore, host.circlesScore),
       circlesWallet: host.circlesWallet,
     },
   };

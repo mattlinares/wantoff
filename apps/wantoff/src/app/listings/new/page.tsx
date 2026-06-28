@@ -58,7 +58,7 @@ function ExtraField({
 
 export default function NewListingPage() {
   const router = useRouter();
-  const { token, loading } = useAuth();
+  const { token, actor, loading } = useAuth();
 
   const [templates, setTemplates] = useState<ItemTypeTemplate[] | null>(null);
   const [itemType, setItemType] = useState("");
@@ -69,7 +69,10 @@ export default function NewListingPage() {
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [extra, setExtra] = useState<Record<string, string>>({});
+  const [duration, setDuration] = useState("");
+  const [scheduledTime, setScheduledTime] = useState("");
   const [minReputation, setMinReputation] = useState("");
+  const [photoUrls, setPhotoUrls] = useState<string[]>([""]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -109,6 +112,7 @@ export default function NewListingPage() {
     const minReputationValue = minReputation ? Number(minReputation) : undefined;
 
     try {
+      const photos = photoUrls.map((u) => u.trim()).filter(Boolean);
       if (template.itemType === "mealmate.meal") {
         await createListing(token, {
           itemType: template.itemType,
@@ -119,9 +123,14 @@ export default function NewListingPage() {
           capacity: extra.capacity ? Number(extra.capacity) : undefined,
           dietaryInfo: extra.dietaryInfo || undefined,
           minReputation: minReputationValue,
+          attributes: photos.length > 0 ? { photos } : undefined,
         });
       } else {
+        const photos = photoUrls.map((u) => u.trim()).filter(Boolean);
         const attributes: Record<string, unknown> = {};
+        if (photos.length > 0) attributes.photos = photos;
+        if (duration) attributes.duration = Number(duration);
+        if (scheduledTime) attributes.scheduledTime = toIsoOrUndefined(scheduledTime);
         for (const field of extraFields) {
           const raw = extra[field.name] ?? "";
           if (!raw) continue;
@@ -155,7 +164,7 @@ export default function NewListingPage() {
           minReputation: minReputationValue,
         });
       }
-      router.push("/dashboard");
+      router.push(actor ? `/u/${actor.id}` : "/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "failed to create listing");
     } finally {
@@ -213,6 +222,31 @@ export default function NewListingPage() {
           <textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
         </div>
 
+        {template && template.itemType !== "mealmate.meal" && (
+          <>
+            <div className="form-row">
+              <label htmlFor="duration">Duration in minutes (optional)</label>
+              <input
+                id="duration"
+                type="number"
+                min="1"
+                placeholder="e.g. 60 for 1 hour"
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+              />
+            </div>
+            <div className="form-row">
+              <label htmlFor="scheduledTime">Scheduled date &amp; time (optional)</label>
+              <input
+                id="scheduledTime"
+                type="datetime-local"
+                value={scheduledTime}
+                onChange={(e) => setScheduledTime(e.target.value)}
+              />
+            </div>
+          </>
+        )}
+
         {(hasLocationField || template?.itemType === "wantoff.other") && (
           <>
             <div className="form-row">
@@ -243,6 +277,33 @@ export default function NewListingPage() {
             />
           </div>
         ))}
+
+        <div className="form-row">
+          <label>Photos (optional)</label>
+          {photoUrls.map((url, i) => (
+            <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <input
+                type="url"
+                placeholder="https://..."
+                value={url}
+                onChange={(e) => setPhotoUrls((prev) => prev.map((u, j) => j === i ? e.target.value : u))}
+                style={{ flex: 1 }}
+              />
+              {url.trim() && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={url.trim()} alt="" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)", flexShrink: 0 }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+              )}
+              {photoUrls.length > 1 && (
+                <button type="button" onClick={() => setPhotoUrls((prev) => prev.filter((_, j) => j !== i))} style={{ padding: "0 8px", background: "none", color: "var(--muted)", border: "1px solid var(--border)" }}>✕</button>
+              )}
+            </div>
+          ))}
+          {photoUrls.length < 5 && (
+            <button type="button" onClick={() => setPhotoUrls((prev) => [...prev, ""])} style={{ fontSize: 13, padding: "4px 10px", background: "none", border: "1px solid var(--border)", color: "var(--muted)" }}>
+              + Add photo
+            </button>
+          )}
+        </div>
 
         <div className="form-row">
           <label htmlFor="minReputation">Minimum reputation to respond (optional)</label>

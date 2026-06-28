@@ -60,6 +60,7 @@ model Actor {
   reviewCount         Int      @default(0)
   reputationUpdatedAt DateTime @updatedAt
   circlesWallet       String? // CRC wallet address (Gnosis Chain)
+  circlesScore        Float?  // cached trust in-degree score 0-100, refreshed on wallet connect
   gbpRef              String? // future fiat rail reference
   location            Json? // { lat, lng, address } — used to sort listings by proximity
   isAdmin             Boolean  @default(false) // can manage ItemTypeTemplates
