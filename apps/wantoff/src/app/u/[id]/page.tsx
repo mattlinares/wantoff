@@ -10,12 +10,15 @@ import {
   getGroups,
   getExchanges,
   updateExchangeStatus,
+  getExchangeMessages,
+  sendExchangeMessage,
   addListingToGroup,
   removeListingFromGroup,
   updateListing,
   type PublicProfile,
   type Listing,
   type Exchange,
+  type ExchangeMessage,
   type Fee,
   type Group,
 } from "@/lib/api";
@@ -23,6 +26,112 @@ import { PayInCrc } from "./pay-in-crc";
 import { ReputationBadge, ReputationGate } from "@/lib/reputation";
 import { TrustSignal } from "./trust-signal";
 import { WalletConnect } from "./wallet-connect";
+
+function RequestCard({
+  exchange,
+  token,
+  actorId,
+  onAction,
+}: {
+  exchange: Exchange;
+  token: string;
+  actorId: string;
+  onAction: (id: string, status: "CONFIRMED" | "DECLINED") => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<ExchangeMessage[] | null>(null);
+  const [reply, setReply] = useState("");
+  const [sending, setSending] = useState(false);
+  const [actioning, setActioning] = useState(false);
+
+  async function loadMessages() {
+    if (messages !== null) return;
+    const msgs = await getExchangeMessages(token, exchange.id);
+    setMessages(msgs);
+  }
+
+  async function onToggle() {
+    if (!open) await loadMessages();
+    setOpen((v) => !v);
+  }
+
+  async function onSend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!reply.trim()) return;
+    setSending(true);
+    try {
+      const msg = await sendExchangeMessage(token, exchange.id, reply.trim());
+      setMessages((prev) => [...(prev ?? []), msg]);
+      setReply("");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleAction(status: "CONFIRMED" | "DECLINED") {
+    setActioning(true);
+    try { onAction(exchange.id, status); } finally { setActioning(false); }
+  }
+
+  const other = exchange.otherActor;
+  const isPending = exchange.status === "PENDING";
+
+  return (
+    <div style={{ borderBottom: "1px solid var(--border)", paddingBottom: 12, marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>
+            {other ? <Link href={`/u/${other.id}`}>{other.displayName}</Link> : "Someone"}
+            {other && (
+              <span style={{ marginLeft: 8, fontWeight: 400 }}>
+                <ReputationBadge score={other.reputationScore} />
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>
+            Wants your <Link href={`/listings/${exchange.listing.id}`}>{String(exchange.listing.title ?? "listing")}</Link>
+            {" · "}{new Date(exchange.createdAt).toLocaleDateString()}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <button onClick={onToggle} style={{ fontSize: 12, padding: "3px 10px", background: "none", border: "1px solid var(--border)", borderRadius: 6, cursor: "pointer", color: "var(--muted)" }}>
+            {open ? "Hide" : "Thread"}
+          </button>
+          {isPending && <>
+            <button onClick={() => handleAction("CONFIRMED")} disabled={actioning} style={{ padding: "3px 12px", background: "#22c55e", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>Accept</button>
+            <button onClick={() => handleAction("DECLINED")} disabled={actioning} style={{ padding: "3px 12px", background: "none", color: "var(--muted)", border: "1px solid var(--border)", borderRadius: 6, cursor: "pointer", fontSize: 13 }}>Decline</button>
+          </>}
+          {!isPending && <span style={{ fontSize: 12, padding: "2px 8px", borderRadius: 4, background: exchange.status === "CONFIRMED" ? "#22c55e22" : "#ef444422", color: exchange.status === "CONFIRMED" ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{exchange.status}</span>}
+        </div>
+      </div>
+
+      {open && (
+        <div style={{ marginTop: 10, paddingLeft: 12, borderLeft: "2px solid var(--border)" }}>
+          {messages === null && <p style={{ fontSize: 13, color: "var(--muted)" }}>Loading...</p>}
+          {messages?.length === 0 && <p style={{ fontSize: 13, color: "var(--muted)" }}>No messages yet.</p>}
+          {messages?.map((m) => (
+            <div key={m.id} style={{ marginBottom: 8 }}>
+              <span style={{ fontWeight: 600, fontSize: 12 }}>{m.senderName === (other?.displayName) ? m.senderName : "You"}</span>
+              <span style={{ fontSize: 11, color: "var(--muted)", marginLeft: 6 }}>{new Date(m.createdAt).toLocaleString()}</span>
+              <p style={{ margin: "2px 0 0", fontSize: 13 }}>{m.body}</p>
+            </div>
+          ))}
+          <form onSubmit={onSend} style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            <input
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              placeholder="Reply..."
+              style={{ flex: 1, fontSize: 13, padding: "4px 8px" }}
+            />
+            <button type="submit" disabled={sending || !reply.trim()} style={{ padding: "4px 12px", fontSize: 13 }}>
+              {sending ? "..." : "Send"}
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const STATUS_LABELS: Record<string, string> = {
   OPEN: "Open",
@@ -151,7 +260,6 @@ export default function PublicProfilePage() {
   const [myListings, setMyListings] = useState<Listing[] | null>(null);
   const [myGroups, setMyGroups] = useState<Group[]>([]);
   const [exchanges, setExchanges] = useState<Exchange[] | null>(null);
-  const [actioning, setActioning] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
 
@@ -184,14 +292,11 @@ export default function PublicProfilePage() {
 
   async function onExchangeAction(exchangeId: string, status: "CONFIRMED" | "DECLINED") {
     if (!token) return;
-    setActioning(exchangeId);
     try {
       const updated = await updateExchangeStatus(token, exchangeId, status);
       setExchanges((prev) => prev?.map((e) => e.id === exchangeId ? { ...e, status: updated.status } : e) ?? null);
     } catch (err) {
       alert(err instanceof Error ? err.message : "failed");
-    } finally {
-      setActioning(null);
     }
   }
 
@@ -217,6 +322,17 @@ export default function PublicProfilePage() {
 
       {profile.location?.address && (
         <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--muted)" }}>📍 {profile.location.address}</p>
+      )}
+
+      {isOwner && exchanges !== null && exchanges.some((e) => e.isIncoming) && (
+        <section style={{ margin: "24px 0", padding: "20px", borderRadius: 8, border: "1px solid #f59e0b44", background: "var(--surface)" }}>
+          <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: "1.1em" }}>
+            Requests <span style={{ fontSize: 13, fontWeight: 400, color: "var(--muted)" }}>({exchanges.filter((e) => e.isIncoming && e.status === "PENDING").length} pending)</span>
+          </h2>
+          {exchanges.filter((e) => e.isIncoming).map((e) => (
+            <RequestCard key={e.id} exchange={e} token={token!} actorId={actor!.id} onAction={onExchangeAction} />
+          ))}
+        </section>
       )}
 
       {isOwner && <div style={{ marginTop: 20 }}><ShareProfile actorId={id} /></div>}
@@ -260,46 +376,6 @@ export default function PublicProfilePage() {
         )}
         {isOwner && <div style={{ marginTop: 16 }}><WalletConnect circlesWallet={profile.circlesWallet} /></div>}
       </section>
-
-      {isOwner && (() => {
-        const incoming = (exchanges ?? []).filter((e) => e.isIncoming && e.status === "PENDING");
-        if (incoming.length === 0) return null;
-        return (
-          <section style={{ margin: "24px 0", padding: "20px", borderRadius: 8, border: "1px solid #f59e0b44", background: "var(--surface)" }}>
-            <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: "1.1em" }}>
-              Incoming requests <span style={{ fontSize: 13, fontWeight: 400, color: "var(--muted)" }}>({incoming.length})</span>
-            </h2>
-            {incoming.map((e) => (
-              <div key={e.id} style={{ padding: "12px 0", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>
-                    {e.otherActor ? <Link href={`/u/${e.otherActor.id}`}>{e.otherActor.displayName}</Link> : "Someone"}
-                    {" "}<span style={{ fontWeight: 400, color: "var(--muted)" }}>wants your</span>{" "}
-                    <Link href={`/listings/${e.listing.id}`}>{String(e.listing.title ?? "listing")}</Link>
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{new Date(e.createdAt).toLocaleDateString()}</div>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    onClick={() => onExchangeAction(e.id, "CONFIRMED")}
-                    disabled={actioning === e.id}
-                    style={{ padding: "4px 14px", background: "#22c55e", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}
-                  >
-                    Accept
-                  </button>
-                  <button
-                    onClick={() => onExchangeAction(e.id, "DECLINED")}
-                    disabled={actioning === e.id}
-                    style={{ padding: "4px 14px", background: "none", color: "var(--muted)", border: "1px solid var(--border)", borderRadius: 6, cursor: "pointer" }}
-                  >
-                    Decline
-                  </button>
-                </div>
-              </div>
-            ))}
-          </section>
-        );
-      })()}
 
       {isOwner ? (
         <>

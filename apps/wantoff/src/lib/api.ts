@@ -186,11 +186,31 @@ export type Exchange = {
   id: string;
   status: string;
   listing: { id: string; title: unknown; mealTime?: unknown };
-  otherActor: { id: string; displayName: string } | null;
+  otherActor: { id: string; displayName: string; reputationScore: number } | null;
   isIncoming: boolean;
   hasReviewedOther: boolean;
   createdAt: string;
 };
+
+export type ExchangeMessage = {
+  id: string;
+  body: string;
+  senderId: string;
+  senderName: string;
+  createdAt: string;
+};
+
+export function getExchangeMessages(token: string, exchangeId: string) {
+  return request<ExchangeMessage[]>(`/exchanges/${exchangeId}/messages`, { token });
+}
+
+export function sendExchangeMessage(token: string, exchangeId: string, body: string) {
+  return request<ExchangeMessage>(`/exchanges/${exchangeId}/messages`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({ body }),
+  });
+}
 
 export function getExchanges(token: string) {
   return request<Exchange[]>("/exchanges", { token });

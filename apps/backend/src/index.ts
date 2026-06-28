@@ -914,7 +914,7 @@ app.get("/exchanges", requireAuth, async (req: AuthedRequest, res) => {
           title: (exchange.offerListing.attributes as Record<string, unknown>).title,
           mealTime: (exchange.offerListing.attributes as Record<string, unknown>).mealTime,
         },
-        otherActor: other ? { id: other.id, displayName: other.displayName } : null,
+        otherActor: other ? { id: other.id, displayName: other.displayName, reputationScore: other.reputationScore } : null,
         isIncoming: exchange.offerListing.actorId === actorId,
         hasReviewedOther: exchange.reviews.some((r) => r.reviewerId === actorId),
         createdAt: exchange.createdAt,
