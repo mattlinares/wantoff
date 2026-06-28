@@ -25,7 +25,6 @@ import {
 import { PayInCrc } from "./pay-in-crc";
 import { ReputationBadge, ReputationGate } from "@/lib/reputation";
 import { TrustSignal } from "./trust-signal";
-import { WalletConnect } from "./wallet-connect";
 
 function RequestCard({
   exchange,
@@ -374,7 +373,6 @@ export default function PublicProfilePage() {
               : "This person hasn't connected a Circles wallet yet."}
           </p>
         )}
-        {isOwner && <div style={{ marginTop: 16 }}><WalletConnect circlesWallet={profile.circlesWallet} /></div>}
       </section>
 
       {isOwner ? (
