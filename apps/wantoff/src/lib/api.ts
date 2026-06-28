@@ -187,12 +187,21 @@ export type Exchange = {
   status: string;
   listing: { id: string; title: unknown; mealTime?: unknown };
   otherActor: { id: string; displayName: string } | null;
+  isIncoming: boolean;
   hasReviewedOther: boolean;
   createdAt: string;
 };
 
 export function getExchanges(token: string) {
   return request<Exchange[]>("/exchanges", { token });
+}
+
+export function updateExchangeStatus(token: string, id: string, status: "CONFIRMED" | "DECLINED") {
+  return request<{ id: string; status: string }>(`/exchanges/${id}`, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify({ status }),
+  });
 }
 
 export type Group = {

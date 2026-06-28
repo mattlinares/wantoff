@@ -9,6 +9,7 @@ import {
   getMyListings,
   getGroups,
   getExchanges,
+  updateExchangeStatus,
   addListingToGroup,
   removeListingFromGroup,
   updateListing,
@@ -150,6 +151,7 @@ export default function PublicProfilePage() {
   const [myListings, setMyListings] = useState<Listing[] | null>(null);
   const [myGroups, setMyGroups] = useState<Group[]>([]);
   const [exchanges, setExchanges] = useState<Exchange[] | null>(null);
+  const [actioning, setActioning] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
 
@@ -177,6 +179,19 @@ export default function PublicProfilePage() {
       setCancelError(err instanceof Error ? err.message : "failed to cancel");
     } finally {
       setCancellingId(null);
+    }
+  }
+
+  async function onExchangeAction(exchangeId: string, status: "CONFIRMED" | "DECLINED") {
+    if (!token) return;
+    setActioning(exchangeId);
+    try {
+      const updated = await updateExchangeStatus(token, exchangeId, status);
+      setExchanges((prev) => prev?.map((e) => e.id === exchangeId ? { ...e, status: updated.status } : e) ?? null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "failed");
+    } finally {
+      setActioning(null);
     }
   }
 
@@ -246,28 +261,45 @@ export default function PublicProfilePage() {
         {isOwner && <div style={{ marginTop: 16 }}><WalletConnect circlesWallet={profile.circlesWallet} /></div>}
       </section>
 
-      {isOwner && exchanges !== null && exchanges.some((e) => e.status === "PENDING") && (
-        <section style={{ margin: "24px 0", padding: "20px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)" }}>
-          <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: "1.1em" }}>Incoming requests</h2>
-          {exchanges.filter((e) => e.status === "PENDING").map((e) => (
-            <div key={e.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>
-                  {e.otherActor
-                    ? <Link href={`/u/${e.otherActor.id}`}>{e.otherActor.displayName}</Link>
-                    : "Someone"
-                  }
-                  {" "}wants: <Link href={`/listings/${e.listing.id}`}>{String(e.listing.title ?? "listing")}</Link>
+      {isOwner && (() => {
+        const incoming = (exchanges ?? []).filter((e) => e.isIncoming && e.status === "PENDING");
+        if (incoming.length === 0) return null;
+        return (
+          <section style={{ margin: "24px 0", padding: "20px", borderRadius: 8, border: "1px solid #f59e0b44", background: "var(--surface)" }}>
+            <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: "1.1em" }}>
+              Incoming requests <span style={{ fontSize: 13, fontWeight: 400, color: "var(--muted)" }}>({incoming.length})</span>
+            </h2>
+            {incoming.map((e) => (
+              <div key={e.id} style={{ padding: "12px 0", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>
+                    {e.otherActor ? <Link href={`/u/${e.otherActor.id}`}>{e.otherActor.displayName}</Link> : "Someone"}
+                    {" "}<span style={{ fontWeight: 400, color: "var(--muted)" }}>wants your</span>{" "}
+                    <Link href={`/listings/${e.listing.id}`}>{String(e.listing.title ?? "listing")}</Link>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{new Date(e.createdAt).toLocaleDateString()}</div>
                 </div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
-                  {new Date(e.createdAt).toLocaleDateString()}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => onExchangeAction(e.id, "CONFIRMED")}
+                    disabled={actioning === e.id}
+                    style={{ padding: "4px 14px", background: "#22c55e", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => onExchangeAction(e.id, "DECLINED")}
+                    disabled={actioning === e.id}
+                    style={{ padding: "4px 14px", background: "none", color: "var(--muted)", border: "1px solid var(--border)", borderRadius: 6, cursor: "pointer" }}
+                  >
+                    Decline
+                  </button>
                 </div>
               </div>
-              <span style={{ fontSize: 12, padding: "2px 8px", borderRadius: 4, background: "#f59e0b22", color: "#f59e0b", fontWeight: 600 }}>Pending</span>
-            </div>
-          ))}
-        </section>
-      )}
+            ))}
+          </section>
+        );
+      })()}
 
       {isOwner ? (
         <>

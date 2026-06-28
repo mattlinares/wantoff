@@ -915,11 +915,37 @@ app.get("/exchanges", requireAuth, async (req: AuthedRequest, res) => {
           mealTime: (exchange.offerListing.attributes as Record<string, unknown>).mealTime,
         },
         otherActor: other ? { id: other.id, displayName: other.displayName } : null,
+        isIncoming: exchange.offerListing.actorId === actorId,
         hasReviewedOther: exchange.reviews.some((r) => r.reviewerId === actorId),
         createdAt: exchange.createdAt,
       };
     }),
   );
+});
+
+// PATCH /exchanges/:id — host accepts or declines a PENDING exchange.
+app.patch("/exchanges/:id", requireAuth, async (req: AuthedRequest, res) => {
+  const actorId = req.actorId!;
+  const { status } = req.body ?? {};
+  if (status !== "CONFIRMED" && status !== "DECLINED") {
+    return res.status(400).json({ error: "status must be CONFIRMED or DECLINED" });
+  }
+  const exchange = await prisma.exchange.findUnique({
+    where: { id: req.params.id },
+    include: { offerListing: true },
+  });
+  if (!exchange) return res.status(404).json({ error: "exchange not found" });
+  if (exchange.offerListing.actorId !== actorId) {
+    return res.status(403).json({ error: "only the listing host can accept or decline" });
+  }
+  if (exchange.status !== "PENDING") {
+    return res.status(400).json({ error: "exchange is no longer pending" });
+  }
+  const updated = await prisma.exchange.update({
+    where: { id: exchange.id },
+    data: { status },
+  });
+  res.json({ id: updated.id, status: updated.status });
 });
 
 app.get("/exchanges/:id/messages", requireAuth, async (req: AuthedRequest, res) => {
