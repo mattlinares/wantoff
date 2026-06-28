@@ -40,16 +40,18 @@ export function WalletConnect({ circlesWallet }: { circlesWallet: string | null 
     <div className="card">
       <h3 style={{ marginTop: 0 }}>Circles wallet</h3>
       {circlesWallet ? (
-        <p>
-          Connected: <code>{circlesWallet}</code>
-        </p>
+        <p>Connected: <code>{circlesWallet}</code></p>
       ) : (
         <p>No Circles wallet connected yet — connect one to receive CRC payments on your listings.</p>
       )}
-      <button onClick={onConnect} disabled={connecting}>
-        {connecting ? "Connecting..." : circlesWallet ? "Reconnect wallet" : "Connect wallet"}
-      </button>
-      {error && <p className="error">{error}</p>}
+      {!EMBEDDED && (
+        <>
+          <button onClick={onConnect} disabled={connecting}>
+            {connecting ? "Connecting..." : circlesWallet ? "Reconnect wallet" : "Connect wallet"}
+          </button>
+          {error && <p className="error">{error}</p>}
+        </>
+      )}
     </div>
   );
 }
