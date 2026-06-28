@@ -4,7 +4,6 @@
 // Note: @circles-sdk/sdk is deprecated upstream in favour of @aboutcircles/sdk,
 // but is still functional and is what this integration is built on for now.
 import { Sdk, circlesConfig, type Avatar } from "@circles-sdk/sdk";
-import { BrowserProviderContractRunner } from "@circles-sdk/adapter-ethers";
 import { parseEther } from "ethers";
 import type { Address } from "@circles-sdk/utils";
 
@@ -47,6 +46,7 @@ export async function connectCirclesWallet(): Promise<CirclesConnection> {
   if (typeof window === "undefined" || !window.ethereum) {
     throw new Error("No Ethereum wallet found. Install MetaMask or another Circles-compatible wallet.");
   }
+  const { BrowserProviderContractRunner } = await import("@circles-sdk/adapter-ethers");
   const runner = new BrowserProviderContractRunner();
   await runner.init();
   if (!runner.address) {
