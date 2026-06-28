@@ -1,10 +1,7 @@
 // Circles SDK helpers: wallet connect, trust-path lookup, in-app CRC payment.
-// See docs/wantoff-app-plan.md section 8 item 6 / "Decisions: Trust-path gating".
-//
-// Note: @circles-sdk/sdk is deprecated upstream in favour of @aboutcircles/sdk,
-// but is still functional and is what this integration is built on for now.
-import { Sdk, circlesConfig, type Avatar } from "@circles-sdk/sdk";
-import { parseEther } from "ethers";
+// All SDK imports are dynamic so the packages are never evaluated at module
+// load time — prevents auto-triggering window.ethereum in embedded/Playground mode.
+import type { Sdk, Avatar } from "@circles-sdk/sdk";
 import type { Address } from "@circles-sdk/utils";
 
 export type TrustOverlap = {
@@ -26,13 +23,16 @@ declare global {
   }
 }
 
+async function getCirclesSdk() {
+  return import("@circles-sdk/sdk");
+}
+
 // Signs the backend's wallet login message using an injected browser wallet.
 // Used for standalone wallet sign-in (embedded mode gets the sig via miniapp-sdk).
 export async function signLoginMessage(message: string): Promise<{ address: string; signature: string }> {
   if (typeof window === "undefined" || !window.ethereum) {
     throw new Error("No Ethereum wallet found. Install MetaMask or another Circles-compatible wallet.");
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const provider = new (await import("ethers")).BrowserProvider(window.ethereum as any);
   const signer = await provider.getSigner();
   const address = await signer.getAddress();
@@ -47,6 +47,7 @@ export async function connectCirclesWallet(): Promise<CirclesConnection> {
     throw new Error("No Ethereum wallet found. Install MetaMask or another Circles-compatible wallet.");
   }
   const { BrowserProviderContractRunner } = await import("@circles-sdk/adapter-ethers");
+  const { Sdk, circlesConfig } = await getCirclesSdk();
   const runner = new BrowserProviderContractRunner();
   await runner.init();
   if (!runner.address) {
@@ -61,6 +62,7 @@ export async function connectCirclesWallet(): Promise<CirclesConnection> {
 // Used in embedded mode where window.ethereum is not available.
 export async function connectCirclesWalletReadOnly(address: string): Promise<CirclesConnection> {
   const { JsonRpcProvider } = await import("ethers");
+  const { Sdk, circlesConfig } = await getCirclesSdk();
   const rpc = process.env.NEXT_PUBLIC_GNOSIS_RPC_URL ?? "https://rpc.gnosischain.com";
   const provider = new JsonRpcProvider(rpc);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,12 +85,12 @@ export async function getTrustPathAmount(avatar: Avatar, to: string): Promise<nu
 // Transfers `amount` CRC (in whole CRC units) from `avatar` to `to`,
 // using the Circles trust-graph pathfinder for transitive transfers.
 export async function payInCrc(avatar: Avatar, to: string, amount: number) {
+  const { parseEther } = await import("ethers");
   return avatar.transfer(to as Address, parseEther(amount.toString()));
 }
 
 // Returns how many people the viewer trusts who also trust the host, and
-// whether the viewer directly trusts the host. Used for the Phase 7
-// trust-graph reputation signal (docs/wantoff-app-plan.md section 6).
+// whether the viewer directly trusts the host.
 export async function getTrustOverlap(
   sdk: Sdk,
   viewerAvatar: Avatar,
