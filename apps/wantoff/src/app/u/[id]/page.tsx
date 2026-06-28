@@ -8,11 +8,13 @@ import {
   getPublicProfile,
   getMyListings,
   getGroups,
+  getExchanges,
   addListingToGroup,
   removeListingFromGroup,
   updateListing,
   type PublicProfile,
   type Listing,
+  type Exchange,
   type Fee,
   type Group,
 } from "@/lib/api";
@@ -147,6 +149,7 @@ export default function PublicProfilePage() {
   const [notFound, setNotFound] = useState(false);
   const [myListings, setMyListings] = useState<Listing[] | null>(null);
   const [myGroups, setMyGroups] = useState<Group[]>([]);
+  const [exchanges, setExchanges] = useState<Exchange[] | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
 
@@ -160,6 +163,7 @@ export default function PublicProfilePage() {
     if (!isOwner || !token) return;
     getMyListings(token).then(setMyListings).catch(() => {});
     getGroups(token).then((gs) => setMyGroups(gs.filter((g) => g.myRole))).catch(() => {});
+    getExchanges(token).then(setExchanges).catch(() => {});
   }, [isOwner, token]);
 
   async function onCancel(listingId: string) {
@@ -241,6 +245,29 @@ export default function PublicProfilePage() {
         )}
         {isOwner && <div style={{ marginTop: 16 }}><WalletConnect circlesWallet={profile.circlesWallet} /></div>}
       </section>
+
+      {isOwner && exchanges !== null && exchanges.some((e) => e.status === "PENDING") && (
+        <section style={{ margin: "24px 0", padding: "20px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)" }}>
+          <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: "1.1em" }}>Incoming requests</h2>
+          {exchanges.filter((e) => e.status === "PENDING").map((e) => (
+            <div key={e.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>
+                  {e.otherActor
+                    ? <Link href={`/u/${e.otherActor.id}`}>{e.otherActor.displayName}</Link>
+                    : "Someone"
+                  }
+                  {" "}wants: <Link href={`/listings/${e.listing.id}`}>{String(e.listing.title ?? "listing")}</Link>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                  {new Date(e.createdAt).toLocaleDateString()}
+                </div>
+              </div>
+              <span style={{ fontSize: 12, padding: "2px 8px", borderRadius: 4, background: "#f59e0b22", color: "#f59e0b", fontWeight: 600 }}>Pending</span>
+            </div>
+          ))}
+        </section>
+      )}
 
       {isOwner ? (
         <>

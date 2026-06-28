@@ -182,6 +182,19 @@ export function verifyWalletLogin(address: string, signature: string) {
   });
 }
 
+export type Exchange = {
+  id: string;
+  status: string;
+  listing: { id: string; title: unknown; mealTime?: unknown };
+  otherActor: { id: string; displayName: string } | null;
+  hasReviewedOther: boolean;
+  createdAt: string;
+};
+
+export function getExchanges(token: string) {
+  return request<Exchange[]>("/exchanges", { token });
+}
+
 export type Group = {
   id: string;
   name: string;
