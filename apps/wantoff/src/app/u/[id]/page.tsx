@@ -225,7 +225,7 @@ export default function PublicProfilePage() {
               </p>
             )}
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <TrustSignal hostWallet={profile.circlesWallet} />
+              <TrustSignal hostWallet={profile.circlesWallet} viewerWallet={actor?.circlesWallet} />
               <span style={{ color: "#aaa", fontSize: "0.85em" }}>
                 wallet: <code>{profile.circlesWallet.slice(0, 8)}…</code>
               </span>

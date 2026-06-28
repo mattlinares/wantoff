@@ -57,6 +57,23 @@ export async function connectCirclesWallet(): Promise<CirclesConnection> {
   return { sdk, avatar, address: runner.address };
 }
 
+// Read-only Circles connection using a public JSON-RPC — no MetaMask required.
+// Used in embedded mode where window.ethereum is not available.
+export async function connectCirclesWalletReadOnly(address: string): Promise<CirclesConnection> {
+  const { JsonRpcProvider } = await import("ethers");
+  const rpc = process.env.NEXT_PUBLIC_GNOSIS_RPC_URL ?? "https://rpc.gnosischain.com";
+  const provider = new JsonRpcProvider(rpc);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const runner: any = {
+    address: address as Address,
+    call: (tx: { to: Address; data: string; value?: bigint }) => provider.call(tx),
+    resolveName: (name: string) => provider.resolveName(name),
+  };
+  const sdk = new Sdk(runner, circlesConfig[GNOSIS_CHAIN_ID]);
+  const avatar = await sdk.getAvatar(address as Address);
+  return { sdk, avatar, address };
+}
+
 // Maximum CRC transferable from `avatar` to `to`. A result of 0 means no
 // usable trust path exists yet (per the plan's hard trust-path gate).
 export async function getTrustPathAmount(avatar: Avatar, to: string): Promise<number> {

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { connectCirclesWallet, getTrustOverlap, type CirclesConnection, type TrustOverlap } from "@/lib/circles";
+import { connectCirclesWallet, connectCirclesWalletReadOnly, getTrustOverlap, type CirclesConnection, type TrustOverlap } from "@/lib/circles";
 
-export function TrustSignal({ hostWallet }: { hostWallet: string }) {
+export function TrustSignal({ hostWallet, viewerWallet }: { hostWallet: string; viewerWallet?: string | null }) {
   const [connection, setConnection] = useState<CirclesConnection | null>(null);
   const [overlap, setOverlap] = useState<TrustOverlap | null>(null);
   const [busy, setBusy] = useState(false);
@@ -13,7 +13,14 @@ export function TrustSignal({ hostWallet }: { hostWallet: string }) {
     setBusy(true);
     setError(null);
     try {
-      const conn = await connectCirclesWallet();
+      let conn: CirclesConnection;
+      if (viewerWallet) {
+        conn = await connectCirclesWalletReadOnly(viewerWallet);
+      } else if (typeof window !== "undefined" && window.ethereum) {
+        conn = await connectCirclesWallet();
+      } else {
+        throw new Error("Connect a Circles wallet to your profile first to check trust connections.");
+      }
       if (conn.address.toLowerCase() === hostWallet.toLowerCase()) {
         setConnection(conn);
         return;
