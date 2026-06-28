@@ -186,6 +186,7 @@ export default function PublicProfilePage() {
           <h1 style={{ margin: "0 0 4px" }}>{profile.displayName}</h1>
           <p style={{ margin: 0 }}>
             <ReputationBadge score={profile.reputationScore} reviewCount={profile.reviewCount} />
+            <span style={{ marginLeft: 8, fontSize: 13, color: "var(--muted)" }}>({Math.round(profile.reputationScore)}/100)</span>
           </p>
         </div>
         {isOwner && (
