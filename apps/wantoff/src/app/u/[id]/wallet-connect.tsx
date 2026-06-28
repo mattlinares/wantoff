@@ -5,9 +5,8 @@ import { useAuth } from "@/lib/auth-context";
 import { updateMe } from "@/lib/api";
 import { connectCirclesWallet } from "@/lib/circles";
 
-// Connects an injected Circles-compatible wallet (e.g. MetaMask on Gnosis
-// Chain) and saves its address as the actor's circlesWallet (used as the
-// CRC payment destination on the public profile and listings).
+const EMBEDDED = process.env.NEXT_PUBLIC_WALLET_MODE === "embedded";
+
 export function WalletConnect({ circlesWallet }: { circlesWallet: string | null }) {
   const { token, refresh } = useAuth();
   const [connecting, setConnecting] = useState(false);
@@ -18,7 +17,16 @@ export function WalletConnect({ circlesWallet }: { circlesWallet: string | null 
     setError(null);
     setConnecting(true);
     try {
-      const { address } = await connectCirclesWallet();
+      let address: string;
+      if (EMBEDDED) {
+        const { onWalletChange, requestCreateAccount } = await import("@aboutcircles/miniapp-sdk");
+        address = await new Promise<string>((resolve) => {
+          const unsub = onWalletChange((w) => { if (w?.address) { unsub(); resolve(w.address); } });
+          requestCreateAccount().then((r) => { if (r?.address) { unsub(); resolve(r.address); } });
+        });
+      } else {
+        ({ address } = await connectCirclesWallet());
+      }
       await updateMe(token, { circlesWallet: address });
       await refresh();
     } catch (err) {
