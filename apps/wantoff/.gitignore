@@ -1,4 +1,4 @@
 .vercel
-.next/cache/
+.next/
 *.tsbuildinfo
 .env.local

@@ -17,14 +17,14 @@ function listingDescription(listing: Listing): string {
   return typeof attrs.description === "string" ? attrs.description : "";
 }
 
-export function formatDuration(minutes: number): string {
+function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return m ? `${h}h ${m}min` : `${h} hour${h > 1 ? "s" : ""}`;
 }
 
-export function formatPrice(fees: Fee[]): string {
+function formatPrice(fees: Fee[]): string {
   const required = fees.filter((f) => f.required);
   if (required.length === 0) return "Free";
   const currency = required.find((f) => f.kind === "currency");
