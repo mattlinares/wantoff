@@ -83,11 +83,9 @@ export default function HomePage() {
         const sections = sectionOrder.map((name) => ({ name, items: sectionMap.get(name)! }));
         return sections.map((section, si) => (
           <div key={si}>
-            {section.name && (
-              <h3 style={{ margin: "20px 0 8px", fontSize: "0.8em", textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--muted)", fontWeight: 600 }}>
-                {section.name}
-              </h3>
-            )}
+            <h3 style={{ margin: "20px 0 8px", fontSize: "0.8em", textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--muted)", fontWeight: 600 }}>
+              {section.name ?? "Not in a community"}
+            </h3>
             {section.items.map((listing) => (
               <Link
                 key={listing.id}
