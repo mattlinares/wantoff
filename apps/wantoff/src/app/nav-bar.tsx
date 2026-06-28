@@ -12,6 +12,7 @@ export function NavBar() {
         <Link href="/" className="nav-brand">Wantoff</Link>
         <Link href="/groups">Communities</Link>
         {!loading && actor && <Link href={`/u/${actor.id}`}>My profile</Link>}
+        {!loading && actor && <Link href="/listings/new">Add item</Link>}
         {!loading && actor && (
           <button
             onClick={() => {

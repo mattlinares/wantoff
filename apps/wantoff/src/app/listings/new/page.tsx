@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { createListing, getItemTypeTemplates, type FieldSchema, type ItemTypeTemplate } from "@/lib/api";
+import { createListing, getItemTypeTemplates, getGroups, addListingToGroup, type FieldSchema, type ItemTypeTemplate, type Group } from "@/lib/api";
 
 // Fields rendered specially (title/description/location are common to every
 // itemType; everything else in a template's fieldSchema is "extra").
@@ -13,6 +13,40 @@ function toIsoOrUndefined(value: string): string | undefined {
   if (!value) return undefined;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const MINUTES = ["00", "15", "30", "45"];
+
+function DateTimeInput({ id, value, onChange }: { id?: string; value: string; onChange: (v: string) => void }) {
+  const [datePart, timePart] = value.includes("T") ? value.split("T") : [value, ""];
+  const [extHh, extMm] = timePart ? timePart.split(":") : ["", ""];
+
+  // Keep hour/minute in local state so selections persist even before a date is chosen
+  const [hh, setHh] = useState(extHh);
+  const [mm, setMm] = useState(extMm);
+
+  // Sync if parent resets the value externally
+  useEffect(() => { setHh(extHh); }, [extHh]);
+  useEffect(() => { setMm(extMm); }, [extMm]);
+
+  const emit = (d: string, h: string, m: string) => {
+    if (d) onChange(`${d}T${h || "00"}:${m || "00"}`);
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+      <input id={id} type="date" value={datePart} onChange={(e) => emit(e.target.value, hh, mm)} style={{ flex: "1 1 auto" }} />
+      <select value={hh} onChange={(e) => { setHh(e.target.value); emit(datePart, e.target.value, mm); }} style={{ width: 70 }}>
+        <option value="">HH</option>
+        {HOURS.map((h) => <option key={h} value={h}>{h}</option>)}
+      </select>
+      <select value={mm} onChange={(e) => { setMm(e.target.value); emit(datePart, hh, e.target.value); }} style={{ width: 70 }}>
+        <option value="">MM</option>
+        {MINUTES.map((m) => <option key={m} value={m}>{m}</option>)}
+      </select>
+    </div>
+  );
 }
 
 function ExtraField({
@@ -32,7 +66,7 @@ function ExtraField({
     case "number":
       return <input id={field.name} type="number" value={value} onChange={(e) => onChange(e.target.value)} />;
     case "date":
-      return <input id={field.name} type="datetime-local" value={value} onChange={(e) => onChange(e.target.value)} />;
+      return <DateTimeInput id={field.name} value={value} onChange={onChange} />;
     case "boolean":
       return (
         <input
@@ -73,6 +107,8 @@ export default function NewListingPage() {
   const [scheduledTime, setScheduledTime] = useState("");
   const [minReputation, setMinReputation] = useState("");
   const [photoUrls, setPhotoUrls] = useState<string[]>([""]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -82,10 +118,14 @@ export default function NewListingPage() {
       router.push("/login");
       return;
     }
-    getItemTypeTemplates()
-      .then((list) => {
+    Promise.all([
+      getItemTypeTemplates(),
+      getGroups(token),
+    ])
+      .then(([list, myGroups]) => {
         setTemplates(list);
         if (list.length > 0) setItemType(list[0].itemType);
+        setGroups(myGroups.filter((g) => g.myRole != null));
       })
       .catch((err) => setError(err instanceof Error ? err.message : "failed to load item types"));
   }, [loading, token, router]);
@@ -113,8 +153,9 @@ export default function NewListingPage() {
 
     try {
       const photos = photoUrls.map((u) => u.trim()).filter(Boolean);
+      let listing;
       if (template.itemType === "mealmate.meal") {
-        await createListing(token, {
+        listing = await createListing(token, {
           itemType: template.itemType,
           title,
           description: description || undefined,
@@ -126,7 +167,6 @@ export default function NewListingPage() {
           attributes: photos.length > 0 ? { photos } : undefined,
         });
       } else {
-        const photos = photoUrls.map((u) => u.trim()).filter(Boolean);
         const attributes: Record<string, unknown> = {};
         if (photos.length > 0) attributes.photos = photos;
         if (duration) attributes.duration = Number(duration);
@@ -152,7 +192,7 @@ export default function NewListingPage() {
           }
         }
 
-        await createListing(token, {
+        listing = await createListing(token, {
           itemType: template.itemType,
           type,
           title,
@@ -163,6 +203,11 @@ export default function NewListingPage() {
           currencies: template.defaultCurrencies,
           minReputation: minReputationValue,
         });
+      }
+      if (selectedGroupIds.length > 0) {
+        await Promise.allSettled(
+          selectedGroupIds.map((gid) => addListingToGroup(token, listing.id, gid)),
+        );
       }
       router.push(actor ? `/u/${actor.id}` : "/");
     } catch (err) {
@@ -237,12 +282,7 @@ export default function NewListingPage() {
             </div>
             <div className="form-row">
               <label htmlFor="scheduledTime">Scheduled date &amp; time (optional)</label>
-              <input
-                id="scheduledTime"
-                type="datetime-local"
-                value={scheduledTime}
-                onChange={(e) => setScheduledTime(e.target.value)}
-              />
+              <DateTimeInput id="scheduledTime" value={scheduledTime} onChange={setScheduledTime} />
             </div>
           </>
         )}
@@ -304,6 +344,28 @@ export default function NewListingPage() {
             </button>
           )}
         </div>
+
+        {groups.length > 0 && (
+          <div className="form-row">
+            <label>Add to community (optional)</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+              {groups.map((g) => (
+                <label key={g.id} style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: "normal", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedGroupIds.includes(g.id)}
+                    onChange={(e) =>
+                      setSelectedGroupIds((prev) =>
+                        e.target.checked ? [...prev, g.id] : prev.filter((id) => id !== g.id),
+                      )
+                    }
+                  />
+                  {g.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="form-row">
           <label htmlFor="minReputation">Minimum reputation to respond (optional)</label>

@@ -67,18 +67,20 @@ export default function HomePage() {
       {listings === null && <p>Loading...</p>}
       {listings !== null && listings.length === 0 && <p>Nothing listed yet.</p>}
       {(() => {
-        // Group shown listings by communityName, preserving sort order.
+        // Group shown listings by communityName, collecting all items per community
+        // into one contiguous block (order of first appearance preserved).
         // null/undefined communityName → "other" bucket rendered without a heading.
-        const sections: { name: string | null; items: typeof shown }[] = [];
+        const sectionMap = new Map<string | null, typeof shown>();
+        const sectionOrder: (string | null)[] = [];
         for (const listing of shown) {
           const name = listing.communityName ?? null;
-          const last = sections[sections.length - 1];
-          if (last && last.name === name) {
-            last.items.push(listing);
-          } else {
-            sections.push({ name, items: [listing] });
+          if (!sectionMap.has(name)) {
+            sectionMap.set(name, []);
+            sectionOrder.push(name);
           }
+          sectionMap.get(name)!.push(listing);
         }
+        const sections = sectionOrder.map((name) => ({ name, items: sectionMap.get(name)! }));
         return sections.map((section, si) => (
           <div key={si}>
             {section.name && (
