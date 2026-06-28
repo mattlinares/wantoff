@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { connectCirclesWallet, connectCirclesWalletReadOnly, getTrustOverlap, type CirclesConnection, type TrustOverlap } from "@/lib/circles";
 
+const EMBEDDED = process.env.NEXT_PUBLIC_WALLET_MODE === "embedded";
+
 export function TrustSignal({ hostWallet, viewerWallet }: { hostWallet: string; viewerWallet?: string | null }) {
   const [connection, setConnection] = useState<CirclesConnection | null>(null);
   const [overlap, setOverlap] = useState<TrustOverlap | null>(null);
@@ -16,7 +18,7 @@ export function TrustSignal({ hostWallet, viewerWallet }: { hostWallet: string; 
       let conn: CirclesConnection;
       if (viewerWallet) {
         conn = await connectCirclesWalletReadOnly(viewerWallet);
-      } else if (typeof window !== "undefined" && window.ethereum) {
+      } else if (!EMBEDDED && typeof window !== "undefined" && window.ethereum) {
         conn = await connectCirclesWallet();
       } else {
         throw new Error("Connect a Circles wallet to your profile first to check trust connections.");

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { connectCirclesWallet, getTrustPathAmount, payInCrc, type CirclesConnection } from "@/lib/circles";
 
+const EMBEDDED = process.env.NEXT_PUBLIC_WALLET_MODE === "embedded";
+
 // In-app CRC payment with a hard trust-path gate (docs/wantoff-app-plan.md
 // "Decisions: Trust-path gating") — Circles personal currencies can only
 // move along a chain of trust connections, so we check for a path before
@@ -49,6 +51,7 @@ export function PayInCrc({ wallet, defaultAmount }: { wallet: string; defaultAmo
   }
 
   if (!connection) {
+    if (EMBEDDED) return null;
     return (
       <div>
         <button onClick={onConnectAndCheck} disabled={busy}>
