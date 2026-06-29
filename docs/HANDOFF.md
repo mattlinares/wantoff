@@ -1,5 +1,79 @@
 # Handoff: Mealmate — all current tasks done
 
+---
+
+## Session: 2026-06-28/29 — Wantoff production hardening + UX
+
+### Deployment
+
+- **Vercel auto-deploy from GitHub is broken** — GitHub pushes do NOT trigger
+  Vercel. Must deploy manually: `cd apps/wantoff && npx vercel --prod`. Railway
+  auto-deploys on push correctly.
+- Railway runs `prisma migrate deploy` on startup. Data migrations (SQL inserts)
+  must include all non-default columns (`id`, `updatedAt` etc.) — Prisma doesn't
+  fill these in for raw SQL. If a migration fails, mark it rolled back with
+  `DATABASE_URL="..." npx prisma migrate resolve --rolled-back <name>` then fix
+  and redeploy.
+
+### What was done
+
+**Seed script** (`scripts/seed-demo.sh`) fully idempotent on re-run:
+- All listing creation uses `post_listing()` — skips if title already exists for
+  that actor.
+- Mealmate joins use `join_meal()` helper — falls back to fetching existing
+  exchange ID if already joined.
+- Group membership, add-to-group, and reviews all handle "already exists" cases.
+
+**Item type templates** (`20260628200000_seed_item_type_templates`): data
+migration seeds 5 built-in types (`wantoff.other`, `wantoff.items`,
+`wantoff.skills`, `wantoff.digital`, `mealmate.meal`) on first deploy.
+Previously the production DB was empty, causing an empty dropdown on the
+add-item form.
+
+**MetaMask / Circles Playground fixes**: The Circles Playground injects
+`window.ethereum` (the Safe provider). Several code paths were triggering it
+unintentionally:
+- `@circles-sdk/sdk` and `@circles-sdk/adapter-ethers` were statically imported
+  at module level — the adapter sniffed `window.ethereum` on load. **Fix:** all
+  Circles SDK imports are now dynamic (`await import(...)`) inside functions,
+  never at module scope.
+- `WalletConnect` reconnect button on the profile page → removed entirely. The
+  wallet is managed by the Circles host in embedded mode; there is nothing to
+  reconnect.
+- `PayInCrc` "Connect wallet" button → hidden when `EMBEDDED=true`.
+- `TrustSignal` MetaMask fallback → blocked when `EMBEDDED=true`; throws a
+  user-facing error instead.
+- Rule: **any new component that touches `window.ethereum` must guard with
+  `if (!EMBEDDED)`**. In embedded mode, use `@aboutcircles/miniapp-sdk`
+  exclusively.
+
+**Profile page**: incoming exchange requests moved to top; includes requester
+reputation badge and threaded message reply. Accept/decline actions on pending
+requests. TrustSignal hidden on own profile (`!isOwner`).
+
+**Create listing form** (`/listings/new`):
+- Community picker (checkboxes for groups the actor belongs to).
+- `DateTimeInput`: date + HH/MM select dropdowns with internal `useState` to
+  prevent browser revert bug.
+- Price field: "Free / donation" or "Fixed price in CRC" (amount input) for
+  non-meal listings.
+- Mealmate.meal: radio 0 / 1 / 2 credits (max 2) with default of 1.
+
+**Listing detail page**: credit fee now displays as "1 mealshare credit" /
+"2 mealshare credits" / "Free" (was showing "Mealshare credit" without amount).
+
+**Home feed**: all listings from the same community grouped together under one
+header; listings not in any community show under "Not in a community".
+
+### Known open items
+
+- Vercel GitHub auto-deploy needs fixing in Project Settings → Git.
+- No email notification when a request is made — user asked, answer was no.
+  Could add `notify.requestReceived` to `POST /listings/:id/request`.
+- Referral/recommend feature deferred (see `memory/project-referral-feature.md`).
+
+---
+
 Status as of 2026-06-14. **Everything from "do them all" (#18-21), the
 location/proximity feature (#24), the mailer system (#25), the #26
 join-flow UX fixes, #27 Wantoff Phase 1 (backend generalisation), #28
