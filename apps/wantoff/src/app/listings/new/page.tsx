@@ -389,19 +389,19 @@ export default function NewListingPage() {
 
         {template && template.itemType === "mealmate.meal" && (
           <div className="form-row">
-            <label htmlFor="creditFeeAmount">Cost per guest (Mealshare credits)</label>
-            <input
-              id="creditFeeAmount"
-              type="number"
-              min="0"
-              step="1"
-              value={creditFeeAmount}
-              onChange={(e) => setCreditFeeAmount(e.target.value)}
-              style={{ width: 100 }}
-            />
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted)" }}>
-              Set to 0 for a free meal. Guests need this many Mealshare credits to join.
-            </p>
+            <label>Cost per guest (Mealshare credits)</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[
+                { value: "0", label: "0 — free" },
+                { value: "1", label: "1 credit" },
+                { value: "2", label: "2 credits" },
+              ].map(({ value, label }) => (
+                <label key={value} style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: "normal", cursor: "pointer" }}>
+                  <input type="radio" name="creditFeeAmount" value={value} checked={creditFeeAmount === value} onChange={() => setCreditFeeAmount(value)} />
+                  {label}
+                </label>
+              ))}
+            </div>
           </div>
         )}
 
