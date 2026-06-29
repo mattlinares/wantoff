@@ -105,6 +105,7 @@ export default function NewListingPage() {
   const [extra, setExtra] = useState<Record<string, string>>({});
   const [duration, setDuration] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
+  const [creditFeeAmount, setCreditFeeAmount] = useState("1");
   const [minReputation, setMinReputation] = useState("");
   const [priceType, setPriceType] = useState<"free" | "crc">("free");
   const [priceAmount, setPriceAmount] = useState("");
@@ -165,6 +166,7 @@ export default function NewListingPage() {
           mealTime: toIsoOrUndefined(extra.mealTime ?? ""),
           capacity: extra.capacity ? Number(extra.capacity) : undefined,
           dietaryInfo: extra.dietaryInfo || undefined,
+          creditFeeAmount: creditFeeAmount !== "" ? Number(creditFeeAmount) : 1,
           minReputation: minReputationValue,
           attributes: photos.length > 0 ? { photos } : undefined,
         });
@@ -384,6 +386,24 @@ export default function NewListingPage() {
             onChange={(e) => setMinReputation(e.target.value)}
           />
         </div>
+
+        {template && template.itemType === "mealmate.meal" && (
+          <div className="form-row">
+            <label htmlFor="creditFeeAmount">Cost per guest (Mealshare credits)</label>
+            <input
+              id="creditFeeAmount"
+              type="number"
+              min="0"
+              step="1"
+              value={creditFeeAmount}
+              onChange={(e) => setCreditFeeAmount(e.target.value)}
+              style={{ width: 100 }}
+            />
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted)" }}>
+              Set to 0 for a free meal. Guests need this many Mealshare credits to join.
+            </p>
+          </div>
+        )}
 
         {template && template.itemType !== "mealmate.meal" && (
           <div className="form-row">

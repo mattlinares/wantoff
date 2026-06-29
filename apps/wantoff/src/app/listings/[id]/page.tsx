@@ -30,7 +30,7 @@ function formatPrice(fees: Fee[]): string {
   const currency = required.find((f) => f.kind === "currency");
   if (currency) return currency.amount ? `${currency.amount} ${currency.currency}` : (currency.currency ?? "Paid");
   const credit = required.find((f) => f.kind === "credit");
-  if (credit) return credit.amount ? `${credit.amount} mealshare credit` : "Mealshare credit";
+  if (credit) return credit.amount ? `${credit.amount} mealshare credit${credit.amount !== 1 ? "s" : ""}` : "Free";
   return "Free";
 }
 

@@ -146,6 +146,7 @@ export type NewListingBody = {
   mealTime?: string;
   capacity?: number;
   dietaryInfo?: string;
+  creditFeeAmount?: number;
 };
 
 export function createListing(token: string, body: NewListingBody) {
