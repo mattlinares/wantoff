@@ -106,6 +106,8 @@ export default function NewListingPage() {
   const [duration, setDuration] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
   const [minReputation, setMinReputation] = useState("");
+  const [priceType, setPriceType] = useState<"free" | "crc">("free");
+  const [priceAmount, setPriceAmount] = useState("");
   const [photoUrls, setPhotoUrls] = useState<string[]>([""]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
@@ -192,6 +194,10 @@ export default function NewListingPage() {
           }
         }
 
+        const fees = priceType === "crc" && priceAmount
+          ? [{ scope: "user" as const, kind: "currency" as const, currency: "CRC", amount: Number(priceAmount), required: true }]
+          : [{ scope: "user" as const, kind: "donation" as const, currency: "CRC", required: false }];
+
         listing = await createListing(token, {
           itemType: template.itemType,
           type,
@@ -199,8 +205,8 @@ export default function NewListingPage() {
           description: description || undefined,
           location,
           attributes,
-          fees: template.defaultFees,
-          currencies: template.defaultCurrencies,
+          fees,
+          currencies: [{ currency: "CRC", preferred: true }],
           minReputation: minReputationValue,
         });
       }
@@ -380,17 +386,30 @@ export default function NewListingPage() {
         </div>
 
         {template && template.itemType !== "mealmate.meal" && (
-          <p>
-            <em>
-              Default pricing for &quot;{template.label}&quot;:{" "}
-              {template.defaultFees.length === 0
-                ? "no fees"
-                : template.defaultFees
-                    .map((f) => `${f.kind}${f.currency ? ` (${f.currency})` : ""}${f.required ? "" : ", optional"}`)
-                    .join(", ")}
-              .
-            </em>
-          </p>
+          <div className="form-row">
+            <label>Price</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: "normal", cursor: "pointer" }}>
+                <input type="radio" name="priceType" value="free" checked={priceType === "free"} onChange={() => setPriceType("free")} />
+                Free / donation
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: "normal", cursor: "pointer" }}>
+                <input type="radio" name="priceType" value="crc" checked={priceType === "crc"} onChange={() => setPriceType("crc")} />
+                Fixed price in CRC
+              </label>
+              {priceType === "crc" && (
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="Amount in CRC"
+                  value={priceAmount}
+                  onChange={(e) => setPriceAmount(e.target.value)}
+                  style={{ width: 160, marginLeft: 24 }}
+                />
+              )}
+            </div>
+          </div>
         )}
 
         {error && <p className="error">{error}</p>}
